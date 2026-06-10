@@ -63,10 +63,14 @@ function App(): ReactNode {
           <Route path="/" element={<HomePage />} />
           <Route path="/home" element={<HomePage />} />
 
-          {/* Project pipeline */}
+          {/* Project pipeline — wait for auth check before deciding */}
           <Route
             path="/project/:id"
-            element={authUser ? <BuildNewPage /> : <Navigate to="/" replace />}
+            element={
+              authUser
+                ? <BuildNewPage />
+                : <Navigate to="/" replace state={{ returnTo: window.location.pathname }} />
+            }
           />
 
           {/* Catch all */}

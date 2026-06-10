@@ -602,7 +602,7 @@ export default function HomePage() {
                 project={project}
                 isActive={activeProjectId === project._id}
                 onClick={() => setActiveProjectId(project._id === activeProjectId ? null : project._id)}
-                onOpen={() => handleNavAction(() => navigate(`/project/${project._id}/ideation`))}
+                onOpen={() => handleNavAction(() => navigate(`/project/${project._id}`))}
                 onDiscovery={() => handleNavAction(() => { setDiscoveryProjectId(project._id); setDiscoveryPhase(1); setShowDiscoveryModal(true); })}
                 onFormulation={() => handleNavAction(() => { setDiscoveryProjectId(project._id); setDiscoveryPhase(2); setShowDiscoveryModal(true); })}
                 onEdit={() => handleEditProject(project)}

@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/useAuthStore.ts";
-import forgeLogo from "../assets/logo.jpg";
+import forgeLogo from "../assets/wireup-logo.jpeg";
 
 export default function AuthPage() {
   const { login, signup } = useAuthStore();
