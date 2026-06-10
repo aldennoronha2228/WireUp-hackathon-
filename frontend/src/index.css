@@ -1,0 +1,314 @@
+/*This file is inspected and needs more context to change - pending*/
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital,wght@0,400;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./styles/mobile.css";
+@import "./styles/desktop.css";
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-ring: hsl(var(--ring));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+:root {
+  /* ── Font families ── */
+  --font-sans:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif:   "Instrument Serif", Georgia, serif;
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+
+  --radius: 0.65rem;
+
+  /* ── shadcn-compatible HSL tokens (light mode) ── */
+  --background:        0 0% 100%;
+  --foreground:        0 0% 10%;
+  --popover:           0 0% 100%;
+  --popover-foreground:0 0% 10%;
+  --card:              0 0% 100%;
+  --card-foreground:   0 0% 10%;
+  --border:            0 0% 90%;
+  --input:             0 0% 90%;
+  --muted:             0 0% 96%;
+  --muted-foreground:  0 0% 45%;
+  --accent:            0 0% 96%;
+  --accent-foreground: 0 0% 10%;
+  --ring:              0 0% 10%;
+
+  /* ── Brand color tokens ── */
+  --bg:           #ffffff;
+  --surface:      #ffffff;
+  --surface-alt:  #f7f7f7;
+  --text:         #1a1a1a;
+  --text-muted:   #737373;
+  --heading:      #0a0a0a;
+  --primary:      #171717;
+  --accent-color: #c8a0e0;
+  --accent-pink:  #b04090;
+
+  --toast-bg:     #0b1510;
+  --toast-text:   #bbf7d0;
+  --toast-border: #4ade80;
+}
+
+.dark {
+  --background:        240 10% 4%;
+  --foreground:        0 0% 96%;
+  --popover:           240 6% 10%;
+  --popover-foreground:0 0% 96%;
+  --card:              240 6% 10%;
+  --card-foreground:   0 0% 96%;
+  --border:            240 6% 18%;
+  --input:             240 6% 18%;
+  --muted:             240 6% 15%;
+  --muted-foreground:  0 0% 55%;
+  --accent:            240 6% 18%;
+  --accent-foreground: 0 0% 96%;
+  --ring:              0 0% 80%;
+}
+
+/* ── Base ───────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar { display: none; }
+
+html {
+  font-size: 106.25%; /* ~17px base — all rem values scale from this */
+}
+
+html, body, #root { min-height: 100svh; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+p { margin: 0; }
+a { color: inherit; text-decoration: none; }
+
+/* ── Layout helpers ─────────────────────────────────────────── */
+.app-shell   { min-height: 100svh; }
+.page-bg     { background: var(--bg); }
+.topbar      { border-bottom: 1px solid var(--border); background: var(--surface); }
+.surface     { background: var(--surface); border: 1px solid var(--border); }
+.surface-alt { background: var(--surface-alt); border: 1px solid var(--border); }
+.title       { color: var(--heading); }
+.muted       { color: var(--text-muted); }
+.btn-primary { background: var(--primary); color: #ffffff; }
+
+/* ── Typography utility classes (design.md) ─────────────────── */
+
+/* Nav brand / logo text */
+.type-brand {
+  font-family: var(--font-sans);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+/* Nav brand byline */
+.type-byline {
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.8;
+  color: var(--text-muted);
+}
+
+/* Nav links */
+.type-nav {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Kicker / badge label */
+.type-kicker {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+/* Hero h1 */
+.type-hero {
+  font-family: var(--font-display);
+  font-size: clamp(3.15rem, min(8.9vw, 8.2vh), 5.95rem);
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+/* Hero h1 — italic accent portion */
+.type-hero .accent-serif,
+.accent-serif {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Hero sub-heading paragraph */
+.type-hero-sub {
+  font-family: var(--font-display);
+  font-size: clamp(1.18rem, 2.65vh, 1.34rem);
+  font-weight: 600;
+  line-height: 1.58;
+}
+
+/* Section h2 — serif */
+.type-section-heading {
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* Section label / overline */
+.type-section-label {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Feature card h3 */
+.type-card-heading {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+
+/* Feature card body */
+.type-card-body {
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/* Footer logo */
+.type-footer-logo {
+  font-family: var(--font-sans);
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+/* Footer description */
+.type-footer-desc {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* Footer nav heading */
+.type-footer-nav-heading {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Copyright */
+.type-copyright {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+}
+
+/* CTA button text */
+.type-cta {
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Form label */
+.type-form-label {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Form input */
+.type-form-input {
+  font-family: var(--font-sans);
+  font-size: 0.98rem;
+}
+
+/* ── Animated background glow ──────────────────────────────────────────────── */
+.glow-orb {
+  position: absolute;
+  bottom: -20%;
+  left: 50%;
+  width: 130%;
+  height: 70%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 80%,
+    rgba(176, 64, 144, 0.6)  0%,
+    rgba(140, 40, 180, 0.32) 38%,
+    rgba(100, 20, 140, 0.12) 62%,
+    transparent              80%
+  );
+  animation: glow-breathe 7s ease-in-out infinite;
+  will-change: transform, opacity;
+  filter: blur(2px);
+}
+
+@keyframes glow-breathe {
+  0% {
+    transform: translateX(-50%) translateY(0%)   scale(1.00);
+    opacity: 0.85;
+  }
+  20% {
+    transform: translateX(-46%) translateY(-4%)  scale(1.06);
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(-54%) translateY(-2%)  scale(0.96);
+    opacity: 0.75;
+  }
+  65% {
+    transform: translateX(-48%) translateY(-6%)  scale(1.08);
+    opacity: 0.95;
+  }
+  85% {
+    transform: translateX(-52%) translateY(-1%)  scale(0.98);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(-50%) translateY(0%)   scale(1.00);
+    opacity: 0.85;
+  }
+}
