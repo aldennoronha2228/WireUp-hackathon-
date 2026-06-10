@@ -6,11 +6,13 @@
 import {
   useEffect, useRef, useState, useCallback, type KeyboardEvent,
 } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useProjectStore, type ProjectFile } from "../store/useProjectStore";
 import { useAuthStore } from "../store/useAuthStore";
+import { AIReasoningPanel, type ReasoningStep, type ChatMessage as AIChatMessage } from "../components/AIReasoningPanel/AIReasoningPanel";
+import { CircuitDiagram } from "../components/CircuitDiagram/CircuitDiagram";
 
 /* ─── Exact VS Code Dark+ / Embedr color tokens ──────────────────────────── */
 const T = {
@@ -232,6 +234,7 @@ function ModelPicker({ val, set }: { val: ModelKey; set: (v: ModelKey) => void }
 export default function BuildNewPage() {
   const { id }       = useParams<{ id: string }>();
   const navigate     = useNavigate();
+  const location     = useLocation();
   const { authUser } = useAuthStore();
   const { currentProject, loadProject, isLoading, updateFile, addFile, setActiveFile } = useProjectStore();
 
@@ -301,11 +304,21 @@ export default function BuildNewPage() {
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
-  /* auto-start pipeline */
+  /* auto-start pipeline — uses router state prompt if available, else project description */
   useEffect(() => {
     if (!currentProject || started.current || pipelineDone) return;
     started.current = true;
-    runPipeline(currentProject.description);
+
+    // Prompt passed from HomePage via navigate state
+    const routerPrompt = (location.state as { prompt?: string } | null)?.prompt?.trim();
+    const idea = routerPrompt || currentProject.description;
+
+    // Auto-send the prompt as the first user chat message so it appears in the panel
+    if (routerPrompt) {
+      setMsgs([{ id: `u-init`, role: "user", content: routerPrompt, streaming: false }]);
+    }
+
+    runPipeline(idea);
   }, [currentProject?._id]);
 
   const runPipeline = async (idea: string) => {
@@ -718,44 +731,166 @@ export default function BuildNewPage() {
             </button>
           </div>
 
-          {/* editor */}
+          {/* editor / view area — switches based on tabMode */}
           <div style={{position:"relative",display:"flex",flex:1,overflow:"hidden"}}>
-            {activeTab && activeFile ? (
-              <>
-                {/* line numbers — VS Code style */}
-                <div style={{flexShrink:0,background:T.bg,minWidth:44,paddingTop:14,paddingRight:10,paddingLeft:6,
-                  textAlign:"right",borderRight:"none",fontFamily:"var(--font-mono)",
-                  fontSize:13,lineHeight:"1.6",color:T.textDim,overflowY:"hidden",userSelect:"none",letterSpacing:"0"}}>
-                  {code.split("\n").map((_,i)=><div key={i} style={{height:"1.6em"}}>{i+1}</div>)}
+
+            {/* ── CODE MODE ─────────────────────────────────────────────── */}
+            {tabMode === "Code" && (
+              activeTab && activeFile ? (
+                <>
+                  <div style={{flexShrink:0,background:T.bg,minWidth:44,paddingTop:14,paddingRight:10,paddingLeft:6,
+                    textAlign:"right",borderRight:"none",fontFamily:"var(--font-mono)",
+                    fontSize:13,lineHeight:"1.6",color:T.textDim,overflowY:"hidden",userSelect:"none",letterSpacing:"0"}}>
+                    {code.split("\n").map((_,i)=><div key={i} style={{height:"1.6em"}}>{i+1}</div>)}
+                  </div>
+                  <textarea ref={editorRef} value={code}
+                    onChange={e=>{setCode(e.target.value);setDirty(true);}}
+                    onKeyDown={onKey} spellCheck={false}
+                    className="ide-scroll"
+                    style={{flex:1,resize:"none",outline:"none",background:T.bg,color:"#d4d4d4",
+                      fontFamily:"var(--font-mono)",fontSize:13,lineHeight:"1.6",tabSize:2,
+                      caretColor:T.text,padding:"14px 14px 14px 8px",border:"none",
+                      userSelect:"text",letterSpacing:"0"}}
+                  />
+                </>
+              ) : (
+                <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,background:T.bg}}>
+                  <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke={T.textDim} strokeWidth={0.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                  </svg>
+                  <div style={{textAlign:"center"}}>
+                    <p style={{fontSize:13,color:T.textMid,marginBottom:4}}>No file open</p>
+                    <p style={{fontSize:12,color:T.textDim}}>Select a file from the explorer or create a new one.</p>
+                  </div>
+                  <button onClick={()=>setNewFileOpen(true)}
+                    style={{padding:"5px 14px",fontSize:12,background:T.blueD,color:T.blueUI,
+                      border:`1px solid ${T.blueHi}`,borderRadius:3,cursor:"pointer"}}>
+                    New file
+                  </button>
                 </div>
-                <textarea ref={editorRef} value={code}
-                  onChange={e=>{setCode(e.target.value);setDirty(true);}}
-                  onKeyDown={onKey} spellCheck={false}
-                  className="ide-scroll"
-                  style={{flex:1,resize:"none",outline:"none",background:T.bg,color:"#d4d4d4",
-                    fontFamily:"var(--font-mono)",fontSize:13,lineHeight:"1.6",tabSize:2,
-                    caretColor:T.text,padding:"14px 14px 14px 8px",border:"none",
-                    userSelect:"text",letterSpacing:"0"}}
-                />
-              </>
-            ) : (
-              <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,background:T.bg}}>
-                <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke={T.textDim} strokeWidth={0.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
-                </svg>
-                <div style={{textAlign:"center"}}>
-                  <p style={{fontSize:13,color:T.textMid,marginBottom:4}}>No file open</p>
-                  <p style={{fontSize:12,color:T.textDim}}>Select a file from the explorer or create a new one.</p>
-                </div>
-                <button onClick={()=>setNewFileOpen(true)}
-                  style={{padding:"5px 14px",fontSize:12,background:T.blueD,color:T.blueUI,
-                    border:`1px solid ${T.blueHi}`,borderRadius:3,cursor:"pointer"}}>
-                  New file
-                </button>
+              )
+            )}
+
+            {/* ── DIAGRAM MODE ──────────────────────────────────────────── */}
+            {tabMode === "Diagram" && (
+              pipelineDone
+                ? <CircuitDiagram
+                    projectDescription={currentProject?.description ?? ""}
+                    pipelineDone={pipelineDone}
+                  />
+                : <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,background:T.bg}}>
+                    <motion.div animate={{rotate:360}} transition={{duration:1,repeat:Infinity,ease:"linear"}}
+                      style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${T.tabBorder}`,borderTopColor:T.blueUI}}/>
+                    <p style={{fontSize:12,color:T.textDim}}>Circuit diagram generating…</p>
+                  </div>
+            )}
+
+            {/* ── SIMULATION MODE ───────────────────────────────────────── */}
+            {tabMode === "Simulation" && (
+              <div style={{flex:1,overflowY:"auto",background:T.bg,padding:"28px 32px"}} className="ide-scroll">
+                {!pipelineDone ? (
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:12}}>
+                    <motion.div animate={{rotate:360}} transition={{duration:1,repeat:Infinity,ease:"linear"}}
+                      style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${T.tabBorder}`,borderTopColor:T.blueUI}}/>
+                    <p style={{fontSize:12,color:T.textDim}}>Simulation generating…</p>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{marginBottom:24}}>
+                      <p style={{fontSize:11,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:T.textDim,marginBottom:6}}>
+                        Simulation Report
+                      </p>
+                      <p style={{fontSize:13,color:T.textMid}}>{currentProject?.description}</p>
+                    </div>
+
+                    {/* Sim status bar */}
+                    <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
+                      {[
+                        {label:"Power",value:"5V / 180mA",ok:true},
+                        {label:"Clock",value:"16 MHz",ok:true},
+                        {label:"Flash",value:"32KB / 28KB used",ok:true},
+                        {label:"RAM",value:"2KB / 1.4KB used",ok:true},
+                      ].map(s=>(
+                        <div key={s.label} style={{
+                          padding:"8px 14px",borderRadius:6,
+                          background:s.ok?"rgba(62,207,142,0.08)":"rgba(239,68,68,0.08)",
+                          border:`1px solid ${s.ok?"rgba(62,207,142,0.25)":"rgba(239,68,68,0.25)"}`,
+                          display:"flex",flexDirection:"column",gap:2
+                        }}>
+                          <span style={{fontSize:10,color:T.textDim,textTransform:"uppercase",letterSpacing:"0.06em"}}>{s.label}</span>
+                          <span style={{fontSize:12,fontWeight:500,color:s.ok?T.greenBright:T.red,fontFamily:"var(--font-mono)"}}>{s.value}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Simulated serial output */}
+                    <div style={{borderRadius:6,overflow:"hidden",border:`1px solid ${T.border}`,marginBottom:20}}>
+                      <div style={{padding:"6px 12px",background:T.titleBar,borderBottom:`1px solid ${T.border}`,
+                        display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <span style={{fontSize:11,fontWeight:500,color:T.textMid}}>Serial Monitor — 9600 baud</span>
+                        <div style={{display:"flex",gap:4}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:T.green,display:"inline-block"}}/>
+                          <span style={{fontSize:10,color:T.green}}>Connected</span>
+                        </div>
+                      </div>
+                      <div style={{padding:"10px 14px",fontFamily:"var(--font-mono)",fontSize:12,lineHeight:1.8,
+                        background:"#0a0c10",minHeight:180}}>
+                        {[
+                          {t:"00:00:01",c:T.green,   l:"[INIT] System starting..."},
+                          {t:"00:00:01",c:T.textDim, l:"[INFO] Initializing DHT22 sensor on pin D2"},
+                          {t:"00:00:02",c:T.green,   l:"[OK] DHT22 initialized"},
+                          {t:"00:00:02",c:T.textDim, l:"[INFO] Initializing OLED display (I2C 0x3C)"},
+                          {t:"00:00:02",c:T.green,   l:"[OK] OLED initialized (128x64)"},
+                          {t:"00:00:03",c:T.blueUI,  l:"[DATA] Temperature: 23.4°C  Humidity: 61.2%"},
+                          {t:"00:00:03",c:T.blueUI,  l:"[DATA] Updating display..."},
+                          {t:"00:00:05",c:T.blueUI,  l:"[DATA] Temperature: 23.5°C  Humidity: 61.1%"},
+                          {t:"00:00:07",c:T.blueUI,  l:"[DATA] Temperature: 23.5°C  Humidity: 60.9%"},
+                          {t:"00:00:09",c:T.amber,   l:"[WARN] High humidity threshold approaching"},
+                        ].map((row,i)=>(
+                          <div key={i} style={{display:"flex",gap:12}}>
+                            <span style={{color:"rgba(255,255,255,0.2)",flexShrink:0}}>{row.t}</span>
+                            <span style={{color:row.c}}>{row.l}</span>
+                          </div>
+                        ))}
+                        <div style={{display:"flex",alignItems:"center",gap:2,marginTop:4}}>
+                          <span style={{color:T.green}}>$</span>
+                          <span style={{width:7,height:13,background:T.text,marginLeft:4,display:"inline-block",animation:"blink 1s step-end infinite"}}/>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Validation checks */}
+                    <div>
+                      <p style={{fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase",color:T.textDim,marginBottom:10}}>
+                        Validation
+                      </p>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {[
+                          {ok:true,  label:"Power budget within limits (180mA < 500mA)"},
+                          {ok:true,  label:"All sensor reads successful"},
+                          {ok:true,  label:"Display render cycle < 50ms"},
+                          {ok:true,  label:"No I2C address conflicts"},
+                          {ok:false, label:"Humidity threshold alert logic not implemented"},
+                        ].map((v,i)=>(
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                              {v.ok
+                                ? <><circle cx="8" cy="8" r="6" fill="#3ecf8e" fillOpacity=".15" stroke="#3ecf8e" strokeWidth="1.2"/><path d="M5 8l2.5 2.5L11 5.5" stroke="#3ecf8e" strokeWidth="1.5" strokeLinecap="round"/></>
+                                : <><circle cx="8" cy="8" r="6" fill="#f59e0b" fillOpacity=".12" stroke="#f59e0b" strokeWidth="1.2"/><path d="M8 5v3.5M8 10.5v.5" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round"/></>
+                              }
+                            </svg>
+                            <span style={{fontSize:12,color:v.ok?T.textMid:T.amber}}>{v.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
-            {/* status bar — VS Code blue bar at bottom */}
-            {activeTab && activeFile && (
+
+            {/* status bar — only in Code mode */}
+            {tabMode === "Code" && activeTab && activeFile && (
               <div style={{position:"absolute",bottom:0,left:0,right:0,height:22,
                 display:"flex",alignItems:"center",justifyContent:"space-between",
                 padding:"0 12px",background:T.statusBar}}>
@@ -890,177 +1025,73 @@ export default function BuildNewPage() {
           </AnimatePresence>
         </div>
 
-        <HDrag onD={d=>setRightW(w=>Math.max(220,Math.min(420,w-d)))}/>
+        <HDrag onD={d=>setRightW(w=>Math.max(260,Math.min(480,w-d)))}/>
 
-        {/* ── RIGHT: AI COPILOT ──────────────────────────────────────── */}
-        <aside style={{width:rightW,minWidth:220,maxWidth:420,flexShrink:0,display:"flex",
-          flexDirection:"column",overflow:"hidden",background:T.titleBar,borderLeft:`1px solid ${T.border}`}}>
-
-          {/* header — "I2C Sensor Dashboard  + New chat" like Embedr */}
-          <div style={{height:35,flexShrink:0,display:"flex",alignItems:"center",
-            padding:"0 12px",borderBottom:`1px solid ${T.border}`,justifyContent:"space-between",background:T.titleBar}}>
-            <span style={{fontSize:13,fontWeight:600,color:T.textBright}}>
-              {currentProject?.description?.slice(0,28) ?? "AI Copilot"}
-            </span>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {pipeActive && (
-                <div style={{display:"flex",alignItems:"center",gap:5}}>
-                  <motion.div animate={{rotate:360}} transition={{duration:0.8,repeat:Infinity,ease:"linear"}}
-                    style={{width:10,height:10,borderRadius:"50%",border:`1.5px solid ${T.tabBorder}`,borderTopColor:T.blueUI}}/>
-                  <span style={{fontSize:11,color:T.blueUI}}>Working</span>
-                </div>
-              )}
-              {pipelineDone && (
-                <button onClick={()=>{started.current=false;setPipelineDone(false);setPipeActive(false);setPipelinePct(0);setStages([]);setMsgs([]);if(currentProject)runPipeline(currentProject.description);}}
-                  style={{fontSize:11,color:T.textDim,background:"none",border:"none",cursor:"pointer",padding:"2px 6px",borderRadius:3}}
-                  onMouseOver={e=>{e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.color=T.text;}}
-                  onMouseOut={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=T.textDim;}}>
-                  + New chat
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* project summary block */}
-          {currentProject && stages.length > 0 && (
-            <div style={{flexShrink:0,padding:"10px 14px",borderBottom:`1px solid ${T.border}`,background:T.bg}}>
-              {/* progress bar */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                <span style={{fontSize:11,color:T.textMid}}>
-                  {pipelineDone ? "Complete" : `${completedN} / ${stages.length} steps`}
-                </span>
-                <span style={{fontSize:11,fontWeight:600,color:T.blueUI}}>{pct}%</span>
-              </div>
-              <div style={{height:2,background:T.tabBorder,overflow:"hidden",marginBottom:8}}>
-                <motion.div style={{height:"100%",background:T.blueUI}} animate={{width:`${pct}%`}} transition={{duration:0.4}}/>
-              </div>
-              {/* stage list */}
-              <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                {stages.map(s=>(
-                  <div key={s.key} style={{display:"flex",alignItems:"center",gap:8}}>
-                    <StageIcon s={s.state}/>
-                    <span style={{fontSize:12,
-                      color:s.state==="running"?T.textBright:s.state==="completed"?T.textMid:T.textDim,
-                      fontWeight:s.state==="running"?500:400}}>
-                      {s.label}
-                    </span>
-                    {s.state==="running" && (
-                      <span style={{fontSize:11,color:T.blueUI,marginLeft:"auto"}}>…</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* chat messages */}
-          <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:14}} className="ide-scroll">
-            {msgs.length===0 && !pipeActive && (
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,paddingTop:28,textAlign:"center"}}>
-                <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke={T.textDim} strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                </svg>
-                <p style={{fontSize:12,color:T.textDim}}>Generation starting…</p>
-              </div>
-            )}
-
-            {msgs.map(m => {
-              const isUser = m.role==="user";
-              return (
-                <div key={m.id} style={{display:"flex",flexDirection:"column",gap:4}}>
-                  {/* stage label for AI messages */}
-                  {!isUser && m.id.startsWith("msg-") && (
-                    <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",
-                      color:T.blueUI}}>
-                      {m.id.replace("msg-","").replace(/_/g," ")}
-                    </span>
-                  )}
-                  <div style={{
-                    fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap",color:T.text,
-                    fontFamily:"var(--font-sans)",
-                    // User messages get a slight indent; AI messages are plain
-                    ...(isUser ? {
-                      background:T.blueD,
-                      border:`1px solid ${T.blueHi}`,
-                      borderRadius:4,
-                      padding:"7px 10px",
-                      color:T.textBright,
-                    } : {}),
-                  }}>
-                    {m.content}
-                    {m.streaming && <span style={{display:"inline-block",width:7,height:13,background:T.text,marginLeft:2,verticalAlign:"text-bottom",animation:"blink 1s step-end infinite"}}/>}
-                  </div>
-                </div>
-              );
-            })}
-
-            {chatBusy && (
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <motion.div animate={{rotate:360}} transition={{duration:0.8,repeat:Infinity,ease:"linear"}}
-                  style={{width:12,height:12,borderRadius:"50%",border:`1.5px solid ${T.tabBorder}`,borderTopColor:T.blueUI,flexShrink:0}}/>
-                <span style={{fontSize:12,color:T.textMid,fontStyle:"italic"}}>Hardware Design Agent thinking…</span>
-              </div>
-            )}
-            <div ref={chatEndRef}/>
-          </div>
-
-          {/* chat input — "Ask Embedr for help…" style */}
-          <div style={{flexShrink:0,borderTop:`1px solid ${T.border}`,padding:"8px 10px",background:T.bg}}>
-            <div style={{display:"flex",alignItems:"flex-end",gap:6,
-              border:`1px solid ${T.border}`,borderRadius:4,background:T.titleBar,padding:"6px 8px",
-              transition:"border-color 0.15s"}}
-              onFocusCapture={e=>(e.currentTarget.style.borderColor=T.blueUI)}
-              onBlurCapture={e=>(e.currentTarget.style.borderColor=T.border)}>
-              <textarea value={chatIn}
-                onChange={e=>{setChatIn(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,96)+"px";}}
-                onKeyDown={e=>{
-                if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();}
-              }}
-                placeholder={pipelineDone?"Ask WireUp AI… (Type @ to mention files)":"AI is generating…"}
-                disabled={chatBusy}
-                rows={1}
-                style={{flex:1,resize:"none",outline:"none",border:"none",
-                  background:"transparent",color:T.text,fontFamily:"var(--font-sans)",
-                  fontSize:12,lineHeight:1.5,padding:0,
-                  maxHeight:96,caretColor:T.text,
-                  opacity:chatBusy?0.5:1}}
-                className="ide-scroll"
-              />
-              <button onClick={chatBusy?undefined:sendChat}
-                disabled={!chatIn.trim()&&!chatBusy}
-                style={{width:24,height:24,borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",
-                  flexShrink:0,
-                  background:chatBusy?T.red:chatIn.trim()?T.blueUI:"transparent",
-                  color:chatIn.trim()||chatBusy?"#fff":T.textDim,
-                  border:chatIn.trim()||chatBusy?"none":`1px solid ${T.border}`,
-                  cursor:chatIn.trim()||chatBusy?"pointer":"not-allowed"}}>
-                {chatBusy
-                  ? <svg width="9" height="9" fill="currentColor" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg>
-                  : <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-                }
-              </button>
-            </div>
-            {/* model selector row — "GLM-5  >_  Preferences" like Embedr bottom bar */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:6}}>
-              <ModelPicker val={model} set={setModel}/>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                {/* attach icon */}
-                <button style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,display:"flex",alignItems:"center",padding:2}}
-                  title="Attach file">
-                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                  </svg>
-                </button>
-                {/* preferences */}
-                <button style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:11,display:"flex",alignItems:"center",gap:3}}>
-                  <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
-                  </svg>
-                  Preferences
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* ── RIGHT: AI REASONING PANEL (VS Code Copilot style) ──────── */}
+        <aside style={{width:rightW,minWidth:260,maxWidth:480,flexShrink:0,
+          borderLeft:`1px solid ${T.border}`,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <AIReasoningPanel
+            projectTitle={currentProject?.description ?? ""}
+            steps={stages.map((s): ReasoningStep => ({
+              id:        s.key,
+              label:     s.label,
+              status:    s.state === "completed" ? "done"
+                       : s.state === "running"   ? "running"
+                       : s.state === "failed"    ? "failed"
+                       : "pending",
+              content:   msgs.find(m => m.id === s.key)?.content ?? "",
+              streaming: msgs.find(m => m.id === s.key)?.streaming ?? false,
+              icon:      (s.key === "requirements" ? "think"
+                       : s.key === "architecture"  ? "build"
+                       : s.key === "components"    ? "search"
+                       : s.key === "circuit"       ? "tool"
+                       : s.key === "firmware"      ? "write"
+                       : s.key === "validation"    ? "check"
+                       : "think") as ReasoningStep["icon"],
+            }))}
+            messages={msgs
+              .filter(m => !stages.find(s => s.key === m.id))
+              .map((m): AIChatMessage => ({
+                id:       m.id,
+                role:     m.role as "user" | "assistant",
+                content:  m.content,
+                streaming:m.streaming,
+              }))}
+            summary={pipelineDone ? (() => {
+              // Build a concise summary from all completed stage content
+              const parts = stages
+                .filter(s => s.state === "completed")
+                .map(s => {
+                  const content = msgs.find(m => m.id === s.key)?.content ?? "";
+                  if (!content) return null;
+                  return `**${s.label}**\n${content}`;
+                })
+                .filter(Boolean);
+              return parts.length > 0
+                ? `Here's a complete analysis of your project:\n\n${parts.join("\n\n")}`
+                : "";
+            })() : ""}
+            chatInput={chatIn}
+            chatBusy={chatBusy}
+            pipelineDone={pipelineDone}
+            pipelineActive={pipeActive}
+            pipelinePct={pct}
+            model={model}
+            onChatInput={setChatIn}
+            onSend={sendChat}
+            onStop={() => setChatBusy(false)}
+            onNewChat={() => {
+              started.current = false;
+              setPipelineDone(false);
+              setPipeActive(false);
+              setPipelinePct(0);
+              setStages([]);
+              setMsgs([]);
+              if (currentProject) runPipeline(currentProject.description);
+            }}
+            onModelChange={(m) => setModel(m as ModelKey)}
+            modelOptions={MODELS.map(m => ({ key: m.key, sub: m.sub }))}
+          />
         </aside>
       </div>
 

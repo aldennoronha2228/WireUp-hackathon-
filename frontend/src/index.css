@@ -1,141 +1,41 @@
-/* ── Google Fonts matching Embedr/VS Code reference ── */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap");
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --font-sans:  "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono:  "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
-  --font-display: "Inter", -apple-system, sans-serif;
-}
-
-/* ── Base reset ─────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html { font-size: 13px; }
-html, body, #root { height: 100%; min-height: 100vh; }
-
-body {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #cccccc;
-  background: #1e1e1e;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a { color: inherit; text-decoration: none; }
-
-/* ── App shell ────────────────────────────────────────── */
-.app-shell { min-height: 100vh; }
-
-/* ── IDE scrollbar — thin like VS Code ────────────────── */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.15) transparent;
-}
-*::-webkit-scrollbar       { width: 8px; height: 8px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 0; }
-*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
-
-.ide-scroll::-webkit-scrollbar       { width: 6px; height: 6px; }
-.ide-scroll::-webkit-scrollbar-track { background: transparent; }
-.ide-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 0; }
-
-/* ── Spinner animation ────────────────────────────────── */
-@keyframes spin { to { transform: rotate(360deg); } }
-.spin { animation: spin 0.8s linear infinite; }
-
-/* ── Pulse for cursor blink ───────────────────────────── */
-@keyframes blink {
-  0%, 49% { opacity: 1; }
-  50%, 100%{ opacity: 0; }
-}
-
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* ─────────────────────────────────────────────────────────────────────────────
-   DESIGN TOKENS  — inspired by Claude.com / Anthropic design language
-   Warm cream canvas · slab-serif display · coral primary · dark navy surfaces
+   WireUp Global Styles
+   Serves both:
+     • Home page  — dark purple/pink aesthetic, Playfair Display + Instrument Serif
+     • IDE workspace — VS Code dark theme, JetBrains Mono
 ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Google Fonts ─────────────────────────────────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=JetBrains+Mono:wght@300;400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Font variables ────────────────────────────────────────────────────────── */
 :root {
-  /* Fonts */
-  --font-display: "Cormorant Garamond", "Tiempos Headline", Georgia, "Times New Roman", serif;
+  /* Home page fonts */
   --font-sans:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono:    "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+  --font-serif:   "Instrument Serif", Georgia, serif;
+  --font-display: "Playfair Display", Georgia, serif;
+  /* IDE / code font */
+  --font-mono:    "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
 
-  /* Brand colors */
-  --coral:               #cc785c;
-  --coral-active:        #a9583e;
-  --coral-disabled:      #e6dfd8;
-
-  /* Canvas / light surfaces */
-  --canvas:              #faf9f5;
-  --surface-soft:        #f5f0e8;
-  --surface-card:        #efe9de;
-  --surface-cream-strong:#e8e0d2;
-
-  /* Dark surfaces */
-  --surface-dark:        #181715;
-  --surface-dark-elevated:#252320;
-  --surface-dark-soft:   #1f1e1b;
-
-  /* Text */
-  --ink:                 #141413;
-  --body-strong:         #252523;
-  --body:                #3d3d3a;
-  --muted:               #6c6a64;
-  --muted-soft:          #8e8b82;
-
-  /* On-dark text */
-  --on-dark:             #faf9f5;
-  --on-dark-soft:        #a09d96;
-
-  /* Borders */
-  --hairline:            #e6dfd8;
-  --hairline-soft:       #ebe6df;
-
-  /* Semantic */
-  --success:             #5db872;
-  --warning:             #d4a017;
-  --error:               #c64545;
-  --accent-teal:         #5db8a6;
-  --accent-amber:        #e8a55a;
-
-  /* Active page theme (defaults to dark IDE) */
-  --bg:                  var(--surface-dark);
-  --surface:             var(--surface-dark-elevated);
-  --text:                var(--on-dark);
-  --text-muted:          var(--on-dark-soft);
-  --border-color:        rgba(255,255,255,0.07);
-  --accent-color:        var(--coral);
-
-  /* Radius scale */
-  --r-xs:  4px;
-  --r-sm:  6px;
-  --r-md:  8px;
-  --r-lg:  12px;
-  --r-xl:  16px;
-  --r-pill:9999px;
+  /* Home page color tokens */
+  --bg:           #0a0a0f;
+  --surface:      #111118;
+  --text:         #f0f0f5;
+  --text-muted:   #8888a8;
+  --accent:       #c8a0e0;
+  --accent-pink:  #b04090;
+  --border:       rgba(255,255,255,0.08);
 }
 
 /* ── Base reset ────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
-*::-webkit-scrollbar { width: 6px; height: 6px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 3px; }
-*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
-
-html { font-size: 100%; }
+/* Home page uses 106.25% (~17px); IDE overrides via inline styles */
+html { font-size: 106.25%; }
 html, body, #root { min-height: 100svh; }
 
 body {
@@ -157,123 +57,206 @@ a  { color: inherit; text-decoration: none; }
 /* ── App shell ─────────────────────────────────────────────────────────────── */
 .app-shell { min-height: 100svh; }
 
-/* ── Display / Serif typography classes ───────────────────────────────────── */
-.type-display-xl {
-  font-family: var(--font-display);
-  font-size: clamp(2.5rem, 5vw, 4rem);
-  font-weight: 400;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-}
-.type-display-lg {
-  font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 400;
+/* ─────────────────────────────────────────────────────────────────────────────
+   HOME PAGE — Typography classes
+───────────────────────────────────────────────────────────────────────────── */
+
+/* Nav brand / logo text */
+.type-brand {
+  font-family: var(--font-sans);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   line-height: 1.1;
-  letter-spacing: -0.03em;
 }
-.type-display-md {
+
+/* Brand byline */
+.type-byline {
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.8;
+  color: var(--text-muted);
+}
+
+/* Nav links */
+.type-nav {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Kicker / badge */
+.type-kicker {
   font-family: var(--font-display);
-  font-size: clamp(1.6rem, 3vw, 2.25rem);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+/* Hero h1 */
+.type-hero {
+  font-family: var(--font-display);
+  font-size: clamp(3.15rem, min(8.9vw, 8.2vh), 5.95rem);
   font-weight: 400;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  line-height: 1.02;
+  letter-spacing: 0;
 }
-.type-display-sm {
-  font-family: var(--font-display);
-  font-size: clamp(1.3rem, 2vw, 1.75rem);
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
-}
-/* Italic accent within display */
-.type-display-xl em,
-.type-display-lg em,
-.type-display-md em,
-.type-display-sm em,
-.serif-italic {
-  font-family: var(--font-display);
+
+/* Hero italic accent */
+.type-hero .accent-serif,
+.accent-serif {
+  font-family: var(--font-serif);
   font-style: italic;
   font-weight: 400;
 }
 
-/* ── Sans / UI classes ─────────────────────────────────────────────────────── */
-.type-title-lg  { font-family: var(--font-sans); font-size: 1.375rem; font-weight: 500; line-height: 1.3; }
-.type-title-md  { font-family: var(--font-sans); font-size: 1.125rem; font-weight: 500; line-height: 1.4; }
-.type-title-sm  { font-family: var(--font-sans); font-size: 1rem;     font-weight: 500; line-height: 1.4; }
-.type-body-md   { font-family: var(--font-sans); font-size: 1rem;     font-weight: 400; line-height: 1.55; }
-.type-body-sm   { font-family: var(--font-sans); font-size: 0.875rem; font-weight: 400; line-height: 1.55; }
-.type-caption   { font-family: var(--font-sans); font-size: 0.8125rem;font-weight: 500; line-height: 1.4; }
-.type-caption-upper { font-family: var(--font-sans); font-size: 0.75rem; font-weight: 500; line-height: 1.4; letter-spacing: 0.09em; text-transform: uppercase; }
-.type-nav       { font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; line-height: 1.4; }
-.type-button    { font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; line-height: 1; }
-.type-brand     { font-family: var(--font-sans); font-size: 1rem;     font-weight: 700; letter-spacing: -0.01em; }
-.type-code      { font-family: var(--font-mono); font-size: 0.875rem; font-weight: 400; line-height: 1.6; }
-
-/* ── Button primitives ─────────────────────────────────────────────────────── */
-.btn-primary {
-  background: var(--coral);
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: var(--r-md);
-  padding: 10px 20px;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s;
+/* Hero sub-heading */
+.type-hero-sub {
+  font-family: var(--font-display);
+  font-size: clamp(1.18rem, 2.65vh, 1.34rem);
+  font-weight: 600;
+  line-height: 1.58;
 }
-.btn-primary:hover  { background: var(--coral-active); }
-.btn-primary:disabled { background: var(--coral-disabled); color: var(--muted); cursor: not-allowed; }
 
-.btn-secondary {
-  background: transparent;
-  color: var(--on-dark);
-  font-family: var(--font-sans);
-  font-size: 0.875rem;
+/* Section h2 */
+.type-section-heading {
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 4vw, 3.2rem);
   font-weight: 500;
-  border-radius: var(--r-md);
-  padding: 10px 20px;
-  border: 1px solid rgba(255,255,255,0.12);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
-.btn-secondary:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.22); }
 
-/* ── Badge ─────────────────────────────────────────────────────────────────── */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  background: var(--surface-card);
-  color: var(--ink);
+/* Section overline label */
+.type-section-label {
   font-family: var(--font-sans);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  border-radius: var(--r-pill);
-  padding: 3px 10px;
-}
-.badge-coral {
-  background: var(--coral);
-  color: #fff;
   font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  border-radius: var(--r-pill);
-  padding: 3px 10px;
 }
 
-/* ── IDE-specific scrollbar override for code areas ────────────────────────── */
-.ide-scroll::-webkit-scrollbar       { width: 5px; height: 5px; }
-.ide-scroll::-webkit-scrollbar-track { background: transparent; }
-.ide-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+/* Feature card h3 */
+.type-card-heading {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 400;
+}
 
-/* ── Animated spinner ──────────────────────────────────────────────────────── */
-@keyframes spin { to { transform: rotate(360deg); } }
+/* Feature card body */
+.type-card-body {
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/* CTA button */
+.type-cta {
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Form label */
+.type-form-label {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Footer logo */
+.type-footer-logo {
+  font-family: var(--font-sans);
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+/* Code — used in IDE */
+.type-code {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   HOME PAGE — Pink/Purple breathing glow orb
+───────────────────────────────────────────────────────────────────────────── */
+.glow-orb {
+  position: absolute;
+  bottom: -20%;
+  left: 50%;
+  width: 130%;
+  height: 70%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 80%,
+    rgba(176, 64, 144, 0.6)  0%,
+    rgba(140, 40, 180, 0.32) 38%,
+    rgba(100, 20, 140, 0.12) 62%,
+    transparent              80%
+  );
+  animation: glow-breathe 7s ease-in-out infinite;
+  will-change: transform, opacity;
+  filter: blur(2px);
+}
+
+@keyframes glow-breathe {
+  0%   { transform: translateX(-50%) translateY(0%)   scale(1.00); opacity: 0.85; }
+  20%  { transform: translateX(-46%) translateY(-4%)  scale(1.06); opacity: 1;    }
+  45%  { transform: translateX(-54%) translateY(-2%)  scale(0.96); opacity: 0.75; }
+  65%  { transform: translateX(-48%) translateY(-6%)  scale(1.08); opacity: 0.95; }
+  85%  { transform: translateX(-52%) translateY(-1%)  scale(0.98); opacity: 0.8;  }
+  100% { transform: translateX(-50%) translateY(0%)   scale(1.00); opacity: 0.85; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCROLLBARS
+───────────────────────────────────────────────────────────────────────────── */
+
+/* Default — home page thin scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+*::-webkit-scrollbar       { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
+/* IDE code areas — square ends like VS Code */
+.ide-scroll::-webkit-scrollbar       { width: 6px; height: 6px; }
+.ide-scroll::-webkit-scrollbar-track { background: transparent; }
+.ide-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 0; }
+.ide-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.20); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LAYOUT HELPERS (home page)
+───────────────────────────────────────────────────────────────────────────── */
+.page-bg     { background: var(--bg); }
+.surface     { background: var(--surface); border: 1px solid var(--border); }
+.title       { color: var(--text); }
+.muted       { color: var(--text-muted); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ANIMATIONS
+───────────────────────────────────────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 .spin { animation: spin 1s linear infinite; }
 
-/* ── Dot blink (AI typing) ─────────────────────────────────────────────────── */
 @keyframes blink {
-  0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
-  40%            { opacity: 1;   transform: translateY(-3px); }
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
 }

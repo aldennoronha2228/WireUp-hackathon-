@@ -1,6 +1,6 @@
 // hooks/useFormulationSocket.ts
 
-import { useEffect, RefObject } from "react";
+import { useEffect, MutableRefObject } from "react";
 import { io, Socket } from "socket.io-client";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../../../lib/axios";
@@ -26,7 +26,7 @@ interface UseFormulationSocketProps {
 
   setModel: (value: string) => void;
 
-  socketRef: RefObject<Socket | null>;
+  socketRef: MutableRefObject<Socket | null>;
 
   getSocketUrl: () => string;
 }

@@ -493,16 +493,27 @@ export default function HomePage() {
     fn();
   };
 
-  const handleSubmitAgenticInput = () => {
+  const handleSubmitAgenticInput = async () => {
     if (!inputValue.trim()) return;
     if (!authUser) {
-      // Save the idea, show auth modal — after login it will auto-continue
       pendingIdeaRef.current = inputValue.trim();
       setShowAuthModal(true);
       return;
     }
-    setDiscoveryIdea(inputValue.trim());
-    setShowDiscoveryModal(true);
+    // Skip the DiscoveryModal entirely — create project and go straight to workspace
+    setIsCreating(true);
+    try {
+      const res = await axiosInstance.post<{ _id: string }>("/projects", {
+        description: inputValue.trim(),
+      });
+      navigate(`/project/${res.data._id}`, {
+        state: { prompt: inputValue.trim() },
+      });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to create project");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleEditProject = async (project: Project) => {
@@ -1095,9 +1106,14 @@ export default function HomePage() {
             setShowAuthModal(false);
             // Continue with the idea the user typed before auth
             if (pendingIdeaRef.current) {
-              setDiscoveryIdea(pendingIdeaRef.current);
+              const idea = pendingIdeaRef.current;
               pendingIdeaRef.current = "";
-              setShowDiscoveryModal(true);
+              // Go straight to workspace — no modal
+              setIsCreating(true);
+              axiosInstance.post<{ _id: string }>("/projects", { description: idea })
+                .then(res => navigate(`/project/${res.data._id}`, { state: { prompt: idea } }))
+                .catch(() => toast.error("Failed to create project"))
+                .finally(() => setIsCreating(false));
             }
           }}
         />
