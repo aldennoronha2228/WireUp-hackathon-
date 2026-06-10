@@ -6,9 +6,9 @@ import { getVoiceHealth, synthesizeAudio, transcribeAudio, transcribeWithWhisper
 
 const router = express.Router();
 
-router.get("/voice/health", protectRoute, getVoiceHealth);
+router.get("/voice/health", getVoiceHealth);
 router.post("/voice/stt", protectRoute, transcribeAudio);
-router.post("/voice/stt/whisper", protectRoute, transcribeWithWhisperController);
+router.post("/voice/stt/whisper", transcribeWithWhisperController);
 router.post("/voice/tts", protectRoute, synthesizeAudio);
 
 export default router;
