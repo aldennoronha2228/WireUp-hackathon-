@@ -116,8 +116,14 @@ export default function ProjectQuestionnaire({ idea, model, onStart, onSkip }: P
               letterSpacing: "0.12em", textTransform: "uppercase", color: Q.text, marginBottom: 4 }}>
               Refine Your Design
             </p>
-            <p style={{ fontFamily: Q.mono, fontSize: 11, color: Q.textDim, lineHeight: 1.5 }}>
+            <p style={{ fontFamily: Q.mono, fontSize: 11, color: Q.textDim, lineHeight: 1.5, marginBottom: 6 }}>
               Answer to customise the hardware architecture, or skip to use AI defaults.
+            </p>
+            <p style={{ fontFamily: Q.mono, fontSize: 11, color: Q.blue, lineHeight: 1.4,
+              background: "rgba(0,122,204,0.08)", border: `1px solid rgba(0,122,204,0.2)`,
+              borderRadius: 4, padding: "4px 8px", display: "inline-block",
+              maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              "{idea.length > 80 ? idea.slice(0, 80) + "…" : idea}"
             </p>
           </div>
 

@@ -23,33 +23,34 @@ export const generateQuestions = async (req: AuthRequest, res: Response) => {
     const raw = await callLLM(
       [{
         role: "user",
-        content: `You are a hardware engineering assistant helping design a project. 
+        content: `You are a hardware engineering assistant helping design a project.
 The user wants to build: "${idea.trim()}"
 
 Generate exactly 6 clarifying questions to better understand their requirements.
-The questions must cover:
-1. What hardware/parts they already have (MCU, sensors, etc.)
-2. Preferred microcontroller/platform (Arduino, ESP32, Raspberry Pi, etc.)
-3. Connectivity needs (WiFi, Bluetooth, LoRa, none)
-4. Display/output method (OLED, LCD, LED, web dashboard, serial monitor)
-5. Power source (USB, battery, solar, PoE)
-6. Skill level / experience (beginner, intermediate, advanced)
+The FIRST question MUST be specifically about this project — ask something directly relevant to "${idea.trim()}" (e.g. if it's a temperature sensor project, ask about the measurement range or display; if it's a robot, ask about movement type; if it's IoT, ask about connectivity needs).
 
-For each question provide 4-5 answer options. Always include "Not sure — suggest one" as an option for hardware questions, and "Other..." for open-ended ones.
+The remaining questions must cover:
+2. What microcontroller/platform they prefer (Arduino, ESP32, Raspberry Pi, etc.)
+3. What hardware/parts they already have
+4. Power source (USB, battery, solar, etc.)
+5. Display/output method
+6. Skill level
 
-Return ONLY a valid JSON array in this exact format, no markdown:
+For each question provide 4-5 answer options relevant to this specific project. Always include "Not sure — suggest one" for technical choices.
+
+Return ONLY a valid JSON array, no markdown:
 [
   {
-    "id": "hardware",
-    "text": "What hardware do you already have?",
-    "hint": "Select all that apply or choose what you'd prefer to use",
-    "options": ["Arduino Uno", "ESP32 DevKit", "Raspberry Pi", "I don't have any — suggest parts", "Other..."]
+    "id": "project_goal",
+    "text": "Specific question directly about THIS project",
+    "hint": "relevant helper text",
+    "options": ["option1", "option2", "option3", "option4", "Not sure — suggest one"]
   },
   ...
 ]`,
       }],
       model,
-      800,
+      900,
     );
 
     // Parse and validate
@@ -74,35 +75,71 @@ Return ONLY a valid JSON array in this exact format, no markdown:
   }
 };
 
-/* ── Default questions if LLM fails ────────────────────────────────────── */
+/* ── Default questions if LLM fails — first question is project-specific ── */
 function defaultQuestions(idea: string): Question[] {
+  // Derive a project-specific first question from the idea
+  const lower = idea.toLowerCase();
+  let firstQ: Question;
+
+  if (lower.includes("temperature") || lower.includes("sensor") || lower.includes("dht")) {
+    firstQ = {
+      id: "project_goal",
+      text: "What should happen when the temperature exceeds a threshold?",
+      hint: "This shapes the core logic of your build",
+      options: ["Sound a buzzer alarm", "Send a notification (WiFi)", "Turn on a fan/relay", "Just display the reading", "Not sure — suggest one"],
+    };
+  } else if (lower.includes("robot") || lower.includes("motor") || lower.includes("servo")) {
+    firstQ = {
+      id: "project_goal",
+      text: "How should your robot move?",
+      hint: "Determines motors and control logic",
+      options: ["Wheels (DC motors)", "Legs (servo motors)", "Arm/gripper (servo)", "Remote controlled", "Autonomous/sensor-guided"],
+    };
+  } else if (lower.includes("iot") || lower.includes("wifi") || lower.includes("cloud")) {
+    firstQ = {
+      id: "project_goal",
+      text: "Where should the data be sent or accessed?",
+      hint: "Shapes the communication architecture",
+      options: ["Local web dashboard (browser)", "Mobile app (Bluetooth)", "Cloud service (MQTT/HTTP)", "Just serial monitor", "Not sure — suggest one"],
+    };
+  } else if (lower.includes("display") || lower.includes("oled") || lower.includes("lcd")) {
+    firstQ = {
+      id: "project_goal",
+      text: "What should be shown on the display?",
+      options: ["Sensor readings (live data)", "Clock / date / time", "Custom menu / UI", "Status indicators", "Not sure — suggest one"],
+    };
+  } else {
+    firstQ = {
+      id: "project_goal",
+      text: `What is the main goal of your "${idea.slice(0, 40)}" project?`,
+      hint: "Helps the AI understand your core use case",
+      options: ["Monitor and display data", "Control something (motor/relay)", "Alert when threshold reached", "Log data over time", "Not sure — suggest one"],
+    };
+  }
+
   return [
-    {
-      id: "hardware",
-      text: "What hardware do you already have?",
-      hint: "This helps us use components you own",
-      options: ["Arduino Uno", "ESP32 DevKit V1", "Raspberry Pi", "Nothing yet — suggest parts", "Other..."],
-    },
+    firstQ,
     {
       id: "mcu",
       text: "Which microcontroller do you prefer?",
       hint: "Affects code style and capabilities",
-      options: ["Arduino (C++)", "ESP32 (WiFi/BT built-in)", "STM32", "Raspberry Pi (Python)", "Not sure — suggest one"],
+      options: ["Arduino (C++, beginner-friendly)", "ESP32 (WiFi/BT built-in)", "STM32 (advanced)", "Raspberry Pi (Python)", "Not sure — suggest one"],
     },
     {
-      id: "connectivity",
-      text: "Does your project need wireless connectivity?",
-      options: ["No — wired/local only", "WiFi", "Bluetooth", "LoRa (long range)", "Not sure"],
-    },
-    {
-      id: "display",
-      text: "How should data be displayed or accessed?",
-      options: ["OLED/LCD display", "Serial monitor (PC only)", "Web dashboard", "Mobile app", "LED indicators only"],
+      id: "hardware",
+      text: "What hardware do you already have?",
+      hint: "We'll design around what you own",
+      options: ["Arduino Uno", "ESP32 DevKit V1", "Raspberry Pi", "Nothing yet — suggest parts", "Other parts (I'll specify)"],
     },
     {
       id: "power",
       text: "What power source is preferred?",
       options: ["USB wall adapter (fixed)", "Battery powered (portable)", "Solar powered (outdoor)", "PoE (Ethernet)", "Not sure"],
+    },
+    {
+      id: "display",
+      text: "How should data be displayed or accessed?",
+      options: ["OLED/LCD display", "Serial monitor (PC only)", "Web dashboard", "LED indicators only", "No display needed"],
     },
     {
       id: "skill",
