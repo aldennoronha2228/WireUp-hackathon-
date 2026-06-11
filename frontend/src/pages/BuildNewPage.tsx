@@ -168,22 +168,26 @@ function StageIcon({ s }: { s: StageState }) {
 
 /* ─── Model catalogue (matches backend chat.controller.ts) ─────────────── */
 const MODELS = [
-  { key: "WU Lite",       id: "claude-haiku-4-5-20251001", sub: "claude-haiku · Fast"       },
-  { key: "WU Pro",        id: "claude-sonnet-4-6",          sub: "claude-sonnet · Balanced"  },
-  { key: "WU Max",        id: "claude-opus-4-8",             sub: "claude-opus · Powerful"    },
-  { key: "GPT-4o",        id: "gpt-4o",                      sub: "gpt-4o · Smart & fast"     },
-  { key: "GPT-4o Mini",   id: "gpt-4o-mini",             sub: "gpt-4o-mini · Fast & light"},
-  { key: "DeepSeek V3",   id: "deepseek-v3",             sub: "deepseek-v3 · Efficient"   },
-  { key: "DeepSeek R1",   id: "deepseek-reasoner",       sub: "deepseek-reasoner · Reasoning" },
-  { key: "Kimi K2.6",     id: "kimi-k2.6",               sub: "kimi-k2.6 · MoE LLM" },
-  { key: "GPT-3.5 Turbo", id: "gpt-3.5-turbo-0613",      sub: "gpt-3.5 · Legacy fast" },
-  { key: "Gemini 3 Flash",id: "gemini-3-flash-preview",  sub: "gemini-3-flash · Smart preview" },
+  // Recommended
+  { key: "WU Lite",       id: "claude-haiku-4-5-20251001", sub: "Fastest for most projects",         group: "Recommended" },
+  { key: "WU Pro",        id: "claude-sonnet-4-6",          sub: "Best balance of quality and speed",  group: "Recommended" },
+  { key: "WU Max",        id: "claude-opus-4-8",             sub: "Highest quality generation",        group: "Recommended" },
+  
+  // Reasoning Models
+  { key: "DeepSeek R1",   id: "deepseek-reasoner",       sub: "Advanced reasoning",                 group: "Reasoning Models" },
+  { key: "Claude Opus",   id: "claude-opus-4-8",             sub: "Complex engineering tasks",          group: "Reasoning Models" },
+  
+  // Fast Models
+  { key: "Claude Haiku",  id: "claude-haiku-4-5-20251001", sub: "Low latency",                        group: "Fast Models" },
+  { key: "GPT-4o Mini",   id: "gpt-4o-mini",             sub: "Quick responses",                    group: "Fast Models" },
+  { key: "Gemini Flash",  id: "gemini-3-flash-preview",  sub: "Fastest generation",                 group: "Fast Models" },
 ] as const;
 type ModelKey = typeof MODELS[number]["key"];
 
 function ModelPicker({ val, set }: { val: ModelKey; set: (v: ModelKey) => void }) {
   const [open, setOpen] = useState(false);
-  const current = MODELS.find(m => m.key === val) ?? MODELS[1];
+  const groups = ["Recommended", "Reasoning Models", "Fast Models"] as const;
+
   return (
     <div style={{position:"relative"}}>
       <button onClick={() => setOpen(v => !v)}
@@ -205,30 +209,55 @@ function ModelPicker({ val, set }: { val: ModelKey; set: (v: ModelKey) => void }
             exit={{ opacity:0, y:4, scale:0.97 }} transition={{ duration:0.1 }}
             style={{ position:"absolute", bottom:"calc(100% + 4px)", left:0,
               background:T.titleBar, border:`1px solid ${T.borderHi}`,
-              borderRadius:4, overflow:"hidden", minWidth:220,
-              boxShadow:"0 8px 24px rgba(0,0,0,0.6)", zIndex:200 }}>
-            {MODELS.map(m => (
-              <button key={m.key} onClick={() => { set(m.key); setOpen(false); }}
-                style={{ width:"100%", display:"flex", flexDirection:"column",
-                  padding:"8px 12px", background: m.key===val ? T.blueD : "transparent",
-                  border:"none", cursor:"pointer", textAlign:"left", transition:"background 0.1s" }}
-                onMouseOver={e => { if (m.key !== val) e.currentTarget.style.background="rgba(255,255,255,0.05)"; }}
-                onMouseOut={e  => { e.currentTarget.style.background = m.key===val ? T.blueD : "transparent"; }}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                  <span style={{ fontSize:12, fontWeight:500, color: m.key===val ? T.blueUI : T.textBright }}>
-                    {m.key}
-                  </span>
-                  {m.key===val && (
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke={T.blueUI} strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l4 4 6-6"/>
-                    </svg>
-                  )}
+              borderRadius:6, minWidth:240, maxHeight: 420, overflowY: "auto",
+              boxShadow:"0 8px 24px rgba(0,0,0,0.6)", zIndex:200, padding: "8px 0" }}
+            className="ide-scroll">
+            
+            {/* Title Header */}
+            <div style={{ padding: "4px 14px", fontSize: 11, fontWeight: 600, color: T.textBright, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              WireUp Models
+            </div>
+            
+            <div style={{ height: 1, background: T.border, margin: "6px 14px 10px 14px" }} />
+
+            {groups.map((groupName, gIdx) => {
+              const groupModels = MODELS.filter(m => m.group === groupName);
+              return (
+                <div key={groupName} style={{ marginTop: gIdx > 0 ? 12 : 0, marginBottom: 4 }}>
+                  {/* Group Title */}
+                  <div style={{ padding: "4px 14px", fontSize: 10, fontWeight: 700, color: T.blueUI, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {groupName}
+                  </div>
+                  
+                  {/* Group Options */}
+                  {groupModels.map(m => {
+                    const isActive = m.key === val;
+                    return (
+                      <button key={m.key} onClick={() => { set(m.key); setOpen(false); }}
+                        style={{ width:"100%", display:"flex", flexDirection:"column",
+                          padding:"6px 14px 6px 20px", background: isActive ? T.blueD : "transparent",
+                          border:"none", cursor:"pointer", textAlign:"left", transition:"background 0.1s" }}
+                        onMouseOver={e => { if (!isActive) e.currentTarget.style.background="rgba(255,255,255,0.05)"; }}
+                        onMouseOut={e  => { e.currentTarget.style.background = isActive ? T.blueD : "transparent"; }}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,width:"100%"}}>
+                          <span style={{ fontSize:12, fontWeight:500, color: isActive ? T.blueUI : T.textBright }}>
+                            {m.key}
+                          </span>
+                          {isActive && (
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke={T.blueUI} strokeWidth={2.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l4 4 6-6"/>
+                            </svg>
+                          )}
+                        </div>
+                        <span style={{ fontSize:10, color:T.textDim, marginTop:2, fontFamily:"var(--font-sans)", lineHeight: "1.3" }}>
+                          {m.sub}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-                <span style={{ fontSize:10, color:T.textDim, marginTop:2, fontFamily:"var(--font-mono)" }}>
-                  {m.sub}
-                </span>
-              </button>
-            ))}
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>

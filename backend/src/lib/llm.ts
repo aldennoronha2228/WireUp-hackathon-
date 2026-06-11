@@ -22,6 +22,9 @@ export const MODEL_MAP: Record<string, string> = {
   "Kimi K2.6":     "moonshotai/kimi-k2.6",
   "GPT-3.5 Turbo": "gpt-3.5-turbo-0613",
   "Gemini 3 Flash":"gemini-3-flash-preview",
+  "Claude Opus":   "claude-opus-4-8",
+  "Claude Haiku":  "claude-haiku-4-5-20251001",
+  "Gemini Flash":  "gemini-3-flash-preview",
 };
 export const DEFAULT_MODEL    = "WU Pro";
 export const DEFAULT_MODEL_ID = MODEL_MAP[DEFAULT_MODEL];
