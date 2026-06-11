@@ -13,6 +13,7 @@ import { useProjectStore, type ProjectFile } from "../store/useProjectStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { AIReasoningPanel, type ReasoningStep, type ChatMessage as AIChatMessage } from "../components/AIReasoningPanel/AIReasoningPanel";
 import { CircuitDiagram } from "../components/CircuitDiagram/CircuitDiagram";
+import ProjectQuestionnaire from "../components/ProjectQuestionnaire/ProjectQuestionnaire";
 
 /* ─── Exact VS Code Dark+ / Embedr color tokens ──────────────────────────── */
 const T = {
@@ -265,6 +266,10 @@ export default function BuildNewPage() {
   const started = useRef(false);
   const sidxMap = useRef<Record<string, number>>({});
 
+  /* questionnaire — shown before pipeline starts */
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [questionnaireIdea, setQuestionnaireIdea] = useState("");
+
   /* chat */
   const [msgs,     setMsgs]     = useState<CMsg[]>([]);
   const [chatIn,   setChatIn]   = useState("");
@@ -304,28 +309,41 @@ export default function BuildNewPage() {
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
-  /* auto-start pipeline — uses router state prompt if available, else project description */
+  /* auto-start — show questionnaire first, then pipeline */
   useEffect(() => {
     if (!currentProject || started.current || pipelineDone) return;
     started.current = true;
 
-    // Prompt passed from HomePage via navigate state
     const routerPrompt = (location.state as { prompt?: string } | null)?.prompt?.trim();
     const idea = routerPrompt || currentProject.description;
 
-    // Auto-send the prompt as the first user chat message so it appears in the panel
+    // Show user's typed message in chat immediately
     if (routerPrompt) {
       setMsgs([{ id: `u-init`, role: "user", content: routerPrompt, streaming: false }]);
     }
 
-    runPipeline(idea);
+    // Show questionnaire before pipeline
+    setQuestionnaireIdea(idea);
+    setShowQuestionnaire(true);
   }, [currentProject?._id]);
 
-  const runPipeline = async (idea: string) => {
+  const runPipeline = async (idea: string, answers?: Record<string, string>) => {
     setPipeActive(true); setPipelinePct(0); setStages([]); sidxMap.current = {};
     const base = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+    // Build context string from questionnaire answers
+    const answersContext = answers && Object.keys(answers).length > 0
+      ? "\n\nUser preferences:\n" + Object.entries(answers)
+          .map(([k, v]) => `- ${k}: ${v}`)
+          .join("\n")
+      : "";
+
     try {
-      for await (const { event, data } of sse(`${base}/generate`, { idea, projectId: id, model })) {
+      for await (const { event, data } of sse(`${base}/generate`, {
+        idea: idea + answersContext,
+        projectId: id,
+        model
+      })) {
         if (event === "stage_start") {
           setStages(p => {
             if (p.find(s => s.key === data.key)) return p.map(s => s.key === data.key ? { ...s, state: "running" } : s);
@@ -1121,7 +1139,10 @@ export default function BuildNewPage() {
               setPipelinePct(0);
               setStages([]);
               setMsgs([]);
-              if (currentProject) runPipeline(currentProject.description);
+              if (currentProject) {
+                setQuestionnaireIdea(currentProject.description);
+                setShowQuestionnaire(true);
+              }
             }}
             onModelChange={(m) => setModel(m as ModelKey)}
             modelOptions={MODELS.map(m => ({ key: m.key, sub: m.sub }))}
@@ -1169,7 +1190,22 @@ export default function BuildNewPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Questionnaire overlay */}
+      {showQuestionnaire && (
+        <ProjectQuestionnaire
+          idea={questionnaireIdea}
+          model={model}
+          onStart={(answers) => {
+            setShowQuestionnaire(false);
+            runPipeline(questionnaireIdea, answers);
+          }}
+          onSkip={() => {
+            setShowQuestionnaire(false);
+            runPipeline(questionnaireIdea);
+          }}
+        />
+      )}
     </div>
   );
 }
-

@@ -14,6 +14,7 @@ import voiceRoutes from "./routes/voice.route";
 import projectRoutes from "./routes/project.route";
 import generateRoutes from "./routes/generate.route";
 import chatRoutes     from "./routes/chat.route";
+import questionRoutes from "./routes/questions.route";
 import { configureGoogleStrategy } from "./controllers/googleAuth.controller";
 
 const app = express();
@@ -53,6 +54,7 @@ app.use("/api", voiceRoutes);
 app.use("/api", projectRoutes);
 app.use("/api", generateRoutes);
 app.use("/api", chatRoutes);
+app.use("/api", questionRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({
