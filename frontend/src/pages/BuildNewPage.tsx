@@ -1125,15 +1125,14 @@ export default function BuildNewPage() {
             }))}
             messages={msgs
               .filter(m => {
-                // Exclude pipeline thinking placeholder
-                if (m.id === "thinking-init") return false;
-                // Exclude all pipeline stage messages (by key pattern)
+                // Exclude pipeline stage outputs (kept only in reasoning steps)
                 const pipelineKeys = new Set([
                   "requirements","architecture","components","circuit",
                   "firmware","validation","documentation","summary",
                   ...stages.map(s => s.key),
                 ]);
                 if (pipelineKeys.has(m.id)) return false;
+                // Keep thinking-init — it renders as the thinking animation
                 return true;
               })
               .map((m): AIChatMessage => ({

@@ -613,11 +613,23 @@ export function AIReasoningPanel({
           </div>
         )}
 
-        {/* Chat messages */}
-        {messages.map(m => <ChatTurn key={m.id} msg={m}/>)}
+        {/* Chat messages — with summary injected after the first user message */}
+        {messages.map((m, i) => {
+          // Find the index of the first real user message (not thinking placeholder)
+          const firstUserIdx = messages.findIndex(x => x.role === "user" && x.id !== "thinking-init");
+          return (
+            <div key={m.id}>
+              <ChatTurn msg={m}/>
+              {/* Summary appears immediately after the first real user message */}
+              {pipelineDone && summary && i === firstUserIdx && (
+                <SummaryTurn summary={summary}/>
+              )}
+            </div>
+          );
+        })}
 
-        {/* Summary inline as an AI response turn */}
-        {pipelineDone && summary && (
+        {/* If no messages yet but pipeline done, show summary */}
+        {pipelineDone && summary && messages.length === 0 && (
           <SummaryTurn summary={summary}/>
         )}
 
