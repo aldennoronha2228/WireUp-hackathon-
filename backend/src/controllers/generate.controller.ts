@@ -97,24 +97,38 @@ Requirements:
 - Return ONLY the .ino code, no explanation text.`,
   },
   {
-    filename: "components.json",
-    language: "JSON",
+    filename: "components.md",
+    language: "Markdown",
     folder:   "specs",
     stageKey: "components",
     prompt: (idea: string, context: string) =>
-      `Create a components.json for the project: "${idea}".
+      `Write a components list in plain English for the project: "${idea}".
 Context:
 ${context}
 
-Return a valid JSON array with objects having these fields:
-- "name": component name (e.g., "Arduino Uno")
-- "type": category (e.g., "MCU", "Sensor", "Display", "Power", "Passive")
-- "quantity": number needed
-- "partNumber": specific part number or model
-- "purpose": one sentence description
-- "pins": array of used pins (e.g., ["D2", "GND", "5V"])
+Format it like this — NO JSON, NO code blocks, just readable text:
 
-Return ONLY the JSON array, no markdown code blocks.`,
+# Components List
+
+## Microcontroller
+**Arduino Uno** — The main brain of the project. Controls all sensors and the display.
+- Quantity: 1
+- Key pins used: D2 (sensor data), SDA/SCL (I2C display), GND, 5V
+
+## Sensors
+**DHT22** — Temperature and humidity sensor. Reads environmental data every 2 seconds.
+- Quantity: 1
+- Key pins used: DATA (D2), VCC (5V), GND
+
+(Continue for all components in the same style)
+
+## Passive Components
+List resistors, capacitors etc.
+
+## Power
+Describe power supply requirements.
+
+Keep it beginner-friendly. No jargon. Explain why each component is needed.`,
   },
   {
     filename: "pins.csv",
