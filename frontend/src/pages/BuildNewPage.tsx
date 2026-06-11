@@ -317,17 +317,28 @@ export default function BuildNewPage() {
     const routerPrompt = (location.state as { prompt?: string } | null)?.prompt?.trim();
     const idea = routerPrompt || currentProject.description;
 
-    // Show user's typed message in chat immediately
+    // 1. Show user's typed message immediately
     if (routerPrompt) {
-      setMsgs([{ id: `u-init`, role: "user", content: routerPrompt, streaming: false }]);
+      setMsgs([
+        { id: `u-init`, role: "user", content: routerPrompt, streaming: false },
+        // 2. Add a thinking placeholder right away — streaming:true + empty content
+        //    triggers the bouncing dots + shimmer animation in ChatTurn
+        { id: `thinking-init`, role: "assistant", content: "", streaming: true },
+      ]);
     }
 
-    // Show questionnaire before pipeline
-    setQuestionnaireIdea(idea);
-    setShowQuestionnaire(true);
+    // 3. Small delay so the animation is visible before questionnaire overlay appears
+    setTimeout(() => {
+      // Remove the thinking placeholder before showing questionnaire
+      setMsgs(p => p.filter(m => m.id !== "thinking-init"));
+      setQuestionnaireIdea(idea);
+      setShowQuestionnaire(true);
+    }, 1800);
   }, [currentProject?._id]);
 
   const runPipeline = async (idea: string, answers?: Record<string, string>) => {
+    // Clear any leftover thinking placeholder
+    setMsgs(p => p.filter(m => m.id !== "thinking-init"));
     setPipeActive(true); setPipelinePct(0); setStages([]); sidxMap.current = {};
     const base = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -1198,11 +1209,20 @@ export default function BuildNewPage() {
           model={model}
           onStart={(answers) => {
             setShowQuestionnaire(false);
-            runPipeline(questionnaireIdea, answers);
+            // Re-add thinking animation briefly while pipeline spins up
+            setMsgs(p => {
+              const hasThink = p.find(m => m.id === "thinking-init");
+              return hasThink ? p : [...p, { id: "thinking-init", role: "assistant" as const, content: "", streaming: true }];
+            });
+            setTimeout(() => runPipeline(questionnaireIdea, answers), 600);
           }}
           onSkip={() => {
             setShowQuestionnaire(false);
-            runPipeline(questionnaireIdea);
+            setMsgs(p => {
+              const hasThink = p.find(m => m.id === "thinking-init");
+              return hasThink ? p : [...p, { id: "thinking-init", role: "assistant" as const, content: "", streaming: true }];
+            });
+            setTimeout(() => runPipeline(questionnaireIdea), 600);
           }}
         />
       )}
