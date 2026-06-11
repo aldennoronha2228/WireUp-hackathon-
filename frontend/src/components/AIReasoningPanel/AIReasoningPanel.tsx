@@ -512,7 +512,7 @@ function ModelPill({ value, options, onChange }: {
               
               <div style={{ height: 1, background: V.sep, margin: "6px 14px 10px 14px" }} />
 
-              {["Recommended", "Reasoning Models", "Fast Models"].map((groupName, gIdx) => {
+              {["Auto", "Recommended", "Reasoning Models", "Fast Models"].map((groupName, gIdx) => {
                 const groupModels = options.filter(m => m.group === groupName);
                 if (groupModels.length === 0) return null;
                 

@@ -25,6 +25,7 @@ export const MODEL_MAP: Record<string, string> = {
   "Claude Opus":   "claude-opus-4-8",
   "Claude Haiku":  "claude-haiku-4-5-20251001",
   "Gemini Flash":  "gemini-3-flash-preview",
+  "Auto":          "claude-sonnet-4-6",
 };
 export const DEFAULT_MODEL    = "WU Pro";
 export const DEFAULT_MODEL_ID = MODEL_MAP[DEFAULT_MODEL];

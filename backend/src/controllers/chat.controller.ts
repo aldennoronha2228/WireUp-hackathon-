@@ -6,6 +6,7 @@ import Project from "../models/project.model";
 interface AuthRequest extends Request { user?: IUser; }
 
 export const CHAT_MODEL_INFO = [
+  { key: "Auto",          id: MODEL_MAP["Auto"],          sub: "Selects best model for cost & speed" },
   { key: "WU Lite",       id: MODEL_MAP["WU Lite"],       sub: "Fastest for most projects" },
   { key: "WU Pro",        id: MODEL_MAP["WU Pro"],        sub: "Best balance of quality and speed" },
   { key: "WU Max",        id: MODEL_MAP["WU Max"],        sub: "Highest quality generation" },
@@ -164,9 +165,18 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: "messages array with at least one message is required" });
   }
 
-  const modelId  = MODEL_MAP[modelKey] ?? MODEL_MAP[DEFAULT_MODEL];
   const lastMsg  = messages[messages.length - 1].content;
   const editMode = isEditRequest(lastMsg);
+
+  let resolvedModelKey = modelKey;
+  if (modelKey === "Auto") {
+    // Automatically select a random cheap model (WU Lite, GPT-4o Mini, Gemini Flash)
+    // to reduce token costs and distribute API usage.
+    const cheapModels = ["WU Lite", "GPT-4o Mini", "Gemini Flash"];
+    resolvedModelKey = cheapModels[Math.floor(Math.random() * cheapModels.length)];
+  }
+
+  const modelId  = MODEL_MAP[resolvedModelKey] ?? MODEL_MAP[DEFAULT_MODEL];
 
   res.setHeader("Content-Type",      "text/event-stream");
   res.setHeader("Cache-Control",     "no-cache");
@@ -175,8 +185,13 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
   res.flushHeaders();
 
   const send = sender(res);
-  send("model_info", { key: modelKey, id: modelId,
-    label: CHAT_MODEL_INFO.find(m => m.key === modelKey)?.sub ?? modelKey });
+  send("model_info", { 
+    key: modelKey, 
+    id: modelId,
+    label: modelKey === "Auto" 
+      ? `Auto (${resolvedModelKey} selected)` 
+      : (CHAT_MODEL_INFO.find(m => m.key === modelKey)?.sub ?? modelKey)
+  });
 
   // Load project files for context
   let projectFiles: Array<{ name: string; content: string }> = [];
@@ -223,10 +238,10 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
 
   if (editMode) {
     // For edit requests — use non-streaming to capture full response + parse edits
-    send("thinking", { message: "Analysing and applying changes…" });
+    send("thinking", { message: modelKey === "Auto" ? `Analysing and applying changes (using ${resolvedModelKey})…` : "Analysing and applying changes…" });
 
     try {
-      const fullResponse = await callLLM(payload, modelKey, 2000);
+      const fullResponse = await callLLM(payload, resolvedModelKey, 2000);
       const edits        = parseFileEdits(fullResponse);
       const visibleText  = stripFileEdits(fullResponse);
 

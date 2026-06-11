@@ -168,6 +168,9 @@ function StageIcon({ s }: { s: StageState }) {
 
 /* ─── Model catalogue (matches backend chat.controller.ts) ─────────────── */
 const MODELS = [
+  // Auto
+  { key: "Auto",          id: "auto",                    sub: "Selects best model for cost & speed", group: "Auto" },
+
   // Recommended
   { key: "WU Lite",       id: "claude-haiku-4-5-20251001", sub: "Fastest for most projects",         group: "Recommended" },
   { key: "WU Pro",        id: "claude-sonnet-4-6",          sub: "Best balance of quality and speed",  group: "Recommended" },
@@ -186,7 +189,7 @@ type ModelKey = typeof MODELS[number]["key"];
 
 function ModelPicker({ val, set }: { val: ModelKey; set: (v: ModelKey) => void }) {
   const [open, setOpen] = useState(false);
-  const groups = ["Recommended", "Reasoning Models", "Fast Models"] as const;
+  const groups = ["Auto", "Recommended", "Reasoning Models", "Fast Models"] as const;
 
   return (
     <div style={{position:"relative"}}>
