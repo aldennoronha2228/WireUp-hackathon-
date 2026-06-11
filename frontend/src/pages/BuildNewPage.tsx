@@ -518,8 +518,21 @@ export default function BuildNewPage() {
     }
   };
 
-  /* editor helpers */
-  const openTab = (n: string) => { setTabs(p=>p.includes(n)?p:[...p,n]); setActiveTab(n); if(id) setActiveFile(id,n); };
+  /* editor helpers — opening a file auto-switches view mode */
+  const openTab = (n: string) => {
+    setTabs(p=>p.includes(n)?p:[...p,n]);
+    setActiveTab(n);
+    if(id) setActiveFile(id,n);
+    // Auto-switch view: diagram.json → Diagram, simulation files → Simulation, else Code
+    const ext = n.split(".").pop()?.toLowerCase() ?? "";
+    if (n.toLowerCase().includes("diagram") && ext === "json") {
+      setTabMode("Diagram");
+    } else if (n.toLowerCase().includes("simulation") || n.toLowerCase().includes("sim")) {
+      setTabMode("Simulation");
+    } else {
+      setTabMode("Code");
+    }
+  };
   const closeTab = (n: string) => { const r=tabs.filter(t=>t!==n); setTabs(r); if(activeTab===n) setActiveTab(r[r.length-1]??""); };
   const saveFile = useCallback(async () => {
     if (!id||!activeTab||!dirty) return;
@@ -583,20 +596,7 @@ export default function BuildNewPage() {
           )}
         </div>
 
-        {/* right — workspace mode tabs like Embedr "Schematics Board main.cpp .gitignore README.md" */}
-        <div style={{display:"flex",alignItems:"stretch",height:"100%",gap:0}}>
-          {(["Code","Diagram","Simulation"] as TabMode[]).map(m => (
-            <button key={m} onClick={()=>setTabMode(m)}
-              style={{padding:"0 16px",height:"100%",fontSize:12,fontWeight:400,border:"none",
-                borderBottom:m===tabMode?`2px solid ${T.blueUI}`:"2px solid transparent",
-                cursor:"pointer",background:"transparent",color:m===tabMode?T.textBright:T.textDim,
-                whiteSpace:"nowrap",transition:"color 0.12s"}}>
-              {m}
-            </button>
-          ))}
-        </div>
-
-        {/* right icons — gear, window controls like Embedr */}
+        {/* right actions only — no mode tabs, view switches via file clicks */}
         <div style={{display:"flex",alignItems:"center",padding:"0 8px",gap:4}}>
           {dirty && (
             <button onClick={saveFile}
