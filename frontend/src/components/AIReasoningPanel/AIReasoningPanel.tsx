@@ -18,6 +18,7 @@ import {
   useState, useRef, useEffect, type KeyboardEvent,
 } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMicRecorder } from "../../hooks/useMicRecorder";
 
 /* ── VS Code Copilot exact colors ─────────────────────────────────────────── */
 const V = {
@@ -295,14 +296,45 @@ function ChatTurn({ msg }: { msg: ChatMessage }) {
       {/* Message content — rendered markdown, not raw */}
       <div style={{ fontSize: 13, lineHeight: 1.7, color: isUser ? V.textBri : V.text,
         fontFamily: "var(--font-sans)" }}>
-        {isUser
-          ? <p style={{ margin: 0, color: V.textBri, fontSize: 13, lineHeight: 1.7 }}>{msg.content}</p>
-          : renderMarkdown(msg.content)
-        }
-        {msg.streaming && (
-          <span style={{ display: "inline-block", width: 6, height: 13,
-            background: V.blue, marginLeft: 2, verticalAlign: "text-bottom",
-            animation: "blink 1s step-end infinite" }}/>
+        {isUser ? (
+          <p style={{ margin: 0, color: V.textBri, fontSize: 13, lineHeight: 1.7 }}>{msg.content}</p>
+        ) : msg.streaming && !msg.content ? (
+          /* ── Loading state: animated typing dots + shimmer lines ── */
+          <div>
+            {/* Bouncing dots */}
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 10 }}>
+              {[0, 0.15, 0.30].map((d, i) => (
+                <motion.div key={i}
+                  style={{ width: 7, height: 7, borderRadius: "50%", background: V.blue }}
+                  animate={{ y: [0, -5, 0], opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 0.7, repeat: Infinity, delay: d, ease: "easeInOut" }}/>
+              ))}
+              <span style={{ fontSize: 11, color: V.textDim, marginLeft: 4, fontStyle: "italic" }}>
+                Thinking…
+              </span>
+            </div>
+            {/* Shimmer skeleton lines */}
+            {[100, 80, 92, 60].map((w, i) => (
+              <motion.div key={i}
+                style={{
+                  height: 11, borderRadius: 4,
+                  width: `${w}%`, marginBottom: i < 3 ? 7 : 0,
+                  background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%)",
+                  backgroundSize: "200% 100%",
+                }}
+                animate={{ backgroundPosition: ["200% 0", "-200% 0"] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "linear", delay: i * 0.1 }}/>
+            ))}
+          </div>
+        ) : (
+          <>
+            {renderMarkdown(msg.content)}
+            {msg.streaming && msg.content && (
+              <span style={{ display: "inline-block", width: 6, height: 13,
+                background: V.blue, marginLeft: 2, verticalAlign: "text-bottom",
+                animation: "blink 1s step-end infinite" }}/>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -380,77 +412,107 @@ function SummaryTurn({ summary }: { summary: string }) {
   );
 }
 
-/* ── Model selector pill ─────────────────────────────────────────────────── */
+/* ── Model selector pill — uses fixed positioning to escape panel overflow ── */
 function ModelPill({ value, options, onChange }: {
   value: string;
   options: Array<{ key: string; sub: string }>;
   onChange: (k: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [rect, setRect]  = useState<DOMRect | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const handleToggle = () => {
+    if (!open && btnRef.current) {
+      setRect(btnRef.current.getBoundingClientRect());
+    }
+    setOpen(v => !v);
+  };
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (
+        menuRef.current && !menuRef.current.contains(t) &&
+        btnRef.current  && !btnRef.current.contains(t)
+      ) setOpen(false);
     };
     if (open) document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button onClick={() => setOpen(v => !v)}
+    <>
+      <button ref={btnRef} onClick={handleToggle}
         style={{ display: "flex", alignItems: "center", gap: 4,
           padding: "3px 8px", background: "transparent",
-          border: `1px solid ${V.inputBdr}`, borderRadius: 12,
-          color: V.textDim, fontSize: 11, cursor: "pointer",
+          border: `1px solid ${open ? V.blue : V.inputBdr}`, borderRadius: 12,
+          color: open ? V.text : V.textDim, fontSize: 11, cursor: "pointer",
           fontFamily: "var(--font-sans)", transition: "border-color 0.15s, color 0.15s" }}
         onMouseOver={e => { e.currentTarget.style.borderColor = V.blue; e.currentTarget.style.color = V.text; }}
-        onMouseOut={e  => { e.currentTarget.style.borderColor = V.inputBdr; e.currentTarget.style.color = V.textDim; }}>
+        onMouseOut={e  => {
+          if (!open) { e.currentTarget.style.borderColor = V.inputBdr; e.currentTarget.style.color = V.textDim; }
+        }}>
         <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8}>
           <path strokeLinecap="round" d="M2 4h12M4 8h8M6 12h4"/>
         </svg>
         {value}
-        <svg width="7" height="7" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5}>
+        <motion.svg animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.13 }}
+          width="7" height="7" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" d="M4 6l4 4 4-4"/>
-        </svg>
+        </motion.svg>
       </button>
 
+      {/* Fixed-position dropdown — completely escapes panel overflow:hidden */}
       <AnimatePresence>
-        {open && (
+        {open && rect && (
           <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.97 }}
+            ref={menuRef}
+            initial={{ opacity: 0, y: 6, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.97 }}
+            exit={{ opacity: 0, y: 6, scale: 0.97 }}
             transition={{ duration: 0.1 }}
             style={{
-              position: "absolute", top: "calc(100% + 6px)", left: 0,
-              background: "#2d2d2d", border: `1px solid #454545`,
-              borderRadius: 6, overflow: "hidden", minWidth: 220,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 500,
+              position: "fixed",
+              /* Open upward — bottom of dropdown aligns with top of button */
+              bottom: window.innerHeight - rect.top + 4,
+              left: rect.left,
+              background: "#2d2d2d",
+              border: "1px solid #505050",
+              borderRadius: 6,
+              overflow: "hidden",
+              minWidth: Math.max(220, rect.width),
+              boxShadow: "0 -4px 20px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.4)",
+              zIndex: 99999,
             }}>
             <div style={{ padding: "4px 0" }}>
               {options.map(m => (
-                <button key={m.key} onClick={() => { onChange(m.key); setOpen(false); }}
+                <button key={m.key}
+                  onClick={() => { onChange(m.key); setOpen(false); }}
                   style={{
                     width: "100%", display: "flex", flexDirection: "column",
                     padding: "8px 12px", border: "none", cursor: "pointer",
-                    textAlign: "left", background: m.key === value ? V.blueHov : "transparent",
+                    textAlign: "left",
+                    background: m.key === value ? "rgba(14,125,212,0.18)" : "transparent",
                     transition: "background 0.1s",
                   }}
-                  onMouseOver={e => { if (m.key !== value) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
-                  onMouseOut={e  => { e.currentTarget.style.background = m.key === value ? V.blueHov : "transparent"; }}>
+                  onMouseOver={e => { if (m.key !== value) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+                  onMouseOut={e  => { e.currentTarget.style.background = m.key === value ? "rgba(14,125,212,0.18)" : "transparent"; }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 13, color: m.key === value ? "#60b8f9" : V.text }}>
+                    <span style={{ fontSize: 13, fontWeight: m.key === value ? 500 : 400,
+                      color: m.key === value ? "#60b8f9" : V.text }}>
                       {m.key}
                     </span>
                     {m.key === value && (
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#60b8f9" strokeWidth={2.5}>
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
+                        stroke="#60b8f9" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l4 4 6-6"/>
                       </svg>
                     )}
                   </div>
-                  <span style={{ fontSize: 11, color: V.textDim, marginTop: 1, fontFamily: "var(--font-mono)" }}>
+                  <span style={{ fontSize: 11, color: V.textDim, marginTop: 2,
+                    fontFamily: "var(--font-mono)" }}>
                     {m.sub}
                   </span>
                 </button>
@@ -459,7 +521,7 @@ function ModelPill({ value, options, onChange }: {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
 
@@ -474,6 +536,11 @@ export function AIReasoningPanel({
   const chatEndRef  = useRef<HTMLDivElement>(null);
   const inputRef    = useRef<HTMLTextAreaElement>(null);
   const [stepsOpen, setStepsOpen] = useState(true);
+
+  /* Whisper mic recorder — appends transcript to chat input */
+  const { isRecording, isTranscribing, toggleRecording } = useMicRecorder(
+    (transcript) => onChatInput(chatInput ? `${chatInput} ${transcript}` : transcript)
+  );
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, summary]);
 
@@ -554,27 +621,7 @@ export function AIReasoningPanel({
           <SummaryTurn summary={summary}/>
         )}
 
-        {/* Typing indicator */}
-        {chatBusy && messages[messages.length - 1]?.role !== "assistant" && (
-          <div style={{ padding: "12px 16px", borderTop: `1px solid ${V.sep}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <div style={{ width: 16, height: 16, borderRadius: "50%",
-                background: "linear-gradient(135deg,#0e7dd4,#4ec9b0)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 9, fontWeight: 700, color: "#fff" }}>W</div>
-              <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em",
-                textTransform: "uppercase", color: "#0e7dd4" }}>WireUp</span>
-            </div>
-            <div style={{ display: "flex", gap: 5 }}>
-              {[0, 0.18, 0.36].map((d, i) => (
-                <motion.div key={i}
-                  style={{ width: 5, height: 5, borderRadius: "50%", background: V.blue }}
-                  animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
-                  transition={{ duration: 0.85, repeat: Infinity, delay: d }}/>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Typing indicator is now handled inline inside ChatTurn when content="" && streaming */}
 
         <div ref={chatEndRef}/>
       </div>
@@ -600,9 +647,8 @@ export function AIReasoningPanel({
             onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatBusy ? onStop() : onSend(); }
             }}
-            placeholder={pipelineDone ? "Ask WireUp AI…" : "AI is generating…"}
-            disabled={chatBusy && !pipelineDone}
-            rows={1}
+            placeholder={isRecording ? "Listening… speak now" : isTranscribing ? "Transcribing…" : pipelineDone ? "Ask WireUp AI…" : "AI is generating…"}
+            disabled={chatBusy && !pipelineDone}            rows={1}
             style={{
               width: "100%", resize: "none", outline: "none", border: "none",
               background: "transparent", color: V.textBri, fontFamily: "var(--font-sans)",
@@ -628,6 +674,44 @@ export function AIReasoningPanel({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32"/>
                 </svg>
               </button>
+
+              {/* Mic button — Whisper STT */}
+              <button
+                onClick={toggleRecording}
+                disabled={isTranscribing}
+                title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing…" : "Voice input"}
+                style={{
+                  background: isRecording ? "rgba(239,68,68,0.15)" : "none",
+                  border: isRecording ? "1px solid rgba(239,68,68,0.35)" : "none",
+                  cursor: isTranscribing ? "not-allowed" : "pointer",
+                  color: isRecording ? "#ef4444" : isTranscribing ? V.blue : V.textDim,
+                  padding: "3px 4px", borderRadius: 3, display: "flex",
+                  alignItems: "center", transition: "color 0.15s, background 0.15s",
+                }}
+                onMouseOver={e => { if (!isRecording && !isTranscribing) e.currentTarget.style.color = V.text; }}
+                onMouseOut={e  => { if (!isRecording && !isTranscribing) e.currentTarget.style.color = V.textDim; }}>
+                {isTranscribing ? (
+                  /* Transcribing spinner */
+                  <motion.div
+                    animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                    style={{ width: 14, height: 14, borderRadius: "50%",
+                      border: `1.5px solid rgba(14,125,212,0.25)`, borderTopColor: V.blue }}/>
+                ) : isRecording ? (
+                  /* Recording — pulsing red mic */
+                  <motion.svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"
+                    animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 1, repeat: Infinity }}>
+                    <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                    <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+                  </motion.svg>
+                ) : (
+                  /* Idle mic */
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+                  </svg>
+                )}
+              </button>
+
               {/* Send / Stop */}
               <button onClick={chatBusy ? onStop : onSend}
                 disabled={!chatInput.trim() && !chatBusy}

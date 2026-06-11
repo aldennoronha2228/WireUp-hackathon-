@@ -68,8 +68,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const project = get().currentProject;
     if (!project) return;
 
-    const updatedFiles = [...project.files, file];
-    set({ currentProject: { ...project, files: updatedFiles, activeFile: file.name } });
+    // Update existing file if name matches, otherwise append
+    const exists = project.files.find(f => f.name === file.name);
+    const updatedFiles = exists
+      ? project.files.map(f => f.name === file.name ? { ...f, ...file } : f)
+      : [...project.files, file];
+
+    const newActiveFile = exists ? project.activeFile : file.name;
+    set({ currentProject: { ...project, files: updatedFiles, activeFile: newActiveFile } });
 
     try {
       await axiosInstance.put(`/project/${projectId}`, {

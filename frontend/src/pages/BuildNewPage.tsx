@@ -347,6 +347,16 @@ export default function BuildNewPage() {
         }
         if (event === "pipeline_done") { setPipelinePct(100); setPipelineDone(true); setPipeActive(false); setBotOpen(true); addLog("success", "[wireup] Generation complete."); }
         if (event === "pipeline_error") { setStages(p => p.map(s => s.state==="running"?{...s,state:"failed"}:s)); setPipeActive(false); addLog("error", `[pipeline] ${data.error}`); toast.error(data.error); }
+        // File created by AI — add to project store immediately so explorer updates live
+        if (event === "file_created" && id) {
+          const { filename, language, content: fileContent } = data as { filename: string; language: string; content: string; folder: string };
+          // addFile handles both new files and updates
+          addFile(id, { name: filename, language, content: fileContent });
+          addLog("success", `[file] Created ${filename}`);
+        }
+        if (event === "file_start") {
+          addLog("info", `[file] Generating ${data.filename}…`);
+        }
       }
     } catch (e: any) { setPipeActive(false); addLog("error", `[wireup] ${e?.message}`); toast.error(e?.message); }
   };
@@ -555,136 +565,157 @@ export default function BuildNewPage() {
         <aside style={{width:leftW,minWidth:160,maxWidth:340,flexShrink:0,background:T.titleBar,
           borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
-          {/* explorer header */}
+          {/* ── Explorer header ─────────────────────────────────────────── */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
             padding:"0 12px",height:30,borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
-            <span style={{fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:T.textMid,userSelect:"none"}}>
-              Explorer
-            </span>
+            <div>
+              <span style={{fontSize:11,fontWeight:700,letterSpacing:"0.08em",
+                textTransform:"uppercase",color:T.textMid,userSelect:"none"}}>
+                Project
+              </span>
+              <span style={{fontSize:11,color:T.textDim,marginLeft:6}}>Files</span>
+            </div>
             <button onClick={()=>setNewFileOpen(true)}
-              style={{background:"none",border:"none",cursor:"pointer",color:T.textMid,padding:2,display:"flex",alignItems:"center",opacity:0.7}}
+              style={{background:"none",border:"none",cursor:"pointer",color:T.textMid,
+                padding:"2px 4px",display:"flex",alignItems:"center",borderRadius:3,
+                transition:"background 0.1s"}}
               title="New file"
-              onMouseOver={e=>(e.currentTarget.style.opacity="1")}
-              onMouseOut={e=>(e.currentTarget.style.opacity="0.7")}>
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              onMouseOver={e=>(e.currentTarget.style.background="rgba(255,255,255,0.08)")}
+              onMouseOut={e=>(e.currentTarget.style.background="none")}>
+              <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
               </svg>
             </button>
           </div>
 
-          {/* project folder tree */}
-          <div style={{flex:1,overflowY:"auto"}} className="ide-scroll">
-            {/* PROJECT ROOT */}
-            <div>
-              <button onClick={()=>setCollapsed(c=>({...c,"root":!c["root"]}))}
-                style={{width:"100%",display:"flex",alignItems:"center",gap:4,padding:"3px 8px 3px 4px",
-                  background:"none",border:"none",cursor:"pointer",textAlign:"left",userSelect:"none"}}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={T.textMid} style={{flexShrink:0}}>
-                  <path d={collapsed["root"]?"M9 6l6 6-6 6":"M6 9l6 6 6-6"}/>
-                </svg>
-                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={T.amber} strokeWidth={1.5} style={{flexShrink:0}}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-                </svg>
-                <span style={{fontSize:13,fontWeight:400,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  {currentProject?.description?.slice(0,22) ?? "project"}
-                </span>
-              </button>
+          {/* ── Folder tree ─────────────────────────────────────────────── */}
+          <div style={{flex:1,overflowY:"auto",paddingBottom:8}} className="ide-scroll">
+            {(() => {
+              // Group files into folders by extension/type
+              const files = currentProject?.files ?? [];
+              const groups: Array<{key:string; label:string; icon:React.ReactNode; files:typeof files}> = [
+                {
+                  key:"src", label:"src",
+                  icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={T.amber} strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>,
+                  files: files.filter(f=>["ino","cpp","c","h","py","js","ts","rs"].includes(f.name.split(".").pop()?.toLowerCase()??"")),
+                },
+                {
+                  key:"wiring", label:"wiring",
+                  icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#4fc1ff" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>,
+                  files: files.filter(f=>["json","svg","xml"].includes(f.name.split(".").pop()?.toLowerCase()??"") && (f.name.toLowerCase().includes("diagram")||f.name.toLowerCase().includes("wiring")||f.name.toLowerCase().includes("schematic"))),
+                },
+                {
+                  key:"specs", label:"specs",
+                  icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#fb923c" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>,
+                  files: files.filter(f=>["csv","json","yaml","yml"].includes(f.name.split(".").pop()?.toLowerCase()??"") && !((f.name.toLowerCase().includes("diagram")||f.name.toLowerCase().includes("wiring")||f.name.toLowerCase().includes("schematic")))),
+                },
+                {
+                  key:"docs", label:"docs",
+                  icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#c586c0" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>,
+                  files: files.filter(f=>["md","txt","pdf"].includes(f.name.split(".").pop()?.toLowerCase()??"")),
+                },
+              ].filter(g => g.files.length > 0);
 
-              {!collapsed["root"] && (
-                <div>
-                  {currentProject?.files.map(f => (
-                    <button key={f.name} onClick={()=>openTab(f.name)}
-                      style={{width:"100%",display:"flex",alignItems:"center",gap:6,
-                        padding:"2px 8px 2px 26px",
-                        background:activeTab===f.name?"rgba(0,122,204,0.2)":"none",
-                        border:"none",cursor:"pointer",textAlign:"left",transition:"background 0.1s"}}
-                      onMouseOver={e=>{ if(activeTab!==f.name) e.currentTarget.style.background="rgba(255,255,255,0.05)"; }}
-                      onMouseOut={e=>{ if(activeTab!==f.name) e.currentTarget.style.background="none"; }}>
-                      <span style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:ld(getLang(f.name)),boxShadow:`0 0 4px ${ld(getLang(f.name))}66`}}/>
-                      <span style={{fontSize:13,color:activeTab===f.name?T.textBright:T.text,
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:activeTab===f.name?500:400}}>
-                        {f.name}
-                      </span>
-                    </button>
-                  ))}
-                  {!currentProject?.files.length && (
-                    <p style={{fontSize:12,color:T.textDim,padding:"6px 8px 6px 26px"}}>No files yet.</p>
-                  )}
-                </div>
-              )}
-            </div>
+              // Files not caught by any group → show in a misc "other" folder
+              const allGrouped = groups.flatMap(g=>g.files);
+              const other = files.filter(f=>!allGrouped.find(gf=>gf.name===f.name));
+              if (other.length) groups.push({key:"other",label:"other",
+                icon:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={T.textDim} strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>,
+                files:other});
 
-            {/* COMPONENTS */}
-            <div style={{marginTop:2}}>
-              <button onClick={()=>setCollapsed(c=>({...c,"components":!c["components"]}))}
-                style={{width:"100%",display:"flex",alignItems:"center",gap:4,padding:"3px 8px 3px 4px",
-                  background:"none",border:"none",cursor:"pointer",userSelect:"none"}}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={T.textMid} style={{flexShrink:0}}>
-                  <path d={collapsed["components"]?"M9 6l6 6-6 6":"M6 9l6 6 6-6"}/>
-                </svg>
-                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={T.greenBright} strokeWidth={1.5} style={{flexShrink:0}}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                </svg>
-                <span style={{fontSize:13,color:T.text}}>Components</span>
-              </button>
-              {!collapsed["components"] && (
-                <div>
-                  {pipelineDone ? [
-                    {n:currentProject?.description?.toLowerCase().includes("esp32")?"ESP32 DevKit V1":"Arduino Uno",t:"MCU"},
-                    {n:"DHT22",t:"Sensor"},
-                    {n:"OLED 128x64",t:"Display"},
-                  ].map(c=>(
-                    <div key={c.n} style={{display:"flex",alignItems:"center",gap:6,padding:"2px 8px 2px 26px"}}>
-                      <span style={{width:8,height:8,borderRadius:1,flexShrink:0,background:T.greenBright}}/>
-                      <span style={{fontSize:13,color:T.text,flex:1}}>{c.n}</span>
-                      <span style={{fontSize:10,color:T.textDim}}>{c.t}</span>
-                    </div>
-                  )) : <p style={{fontSize:12,color:T.textDim,padding:"2px 8px 2px 26px"}}>Generating…</p>}
+              if (!files.length) return (
+                <div style={{padding:"20px 14px",textAlign:"center"}}>
+                  <p style={{fontSize:12,color:T.textDim,lineHeight:1.5}}>
+                    {pipeActive ? "Generating project files…" : "No files yet."}
+                  </p>
                 </div>
-              )}
-            </div>
+              );
 
-            {/* GENERATED ASSETS */}
-            <div style={{marginTop:2}}>
-              <button onClick={()=>setCollapsed(c=>({...c,"assets":!c["assets"]}))}
-                style={{width:"100%",display:"flex",alignItems:"center",gap:4,padding:"3px 8px 3px 4px",
-                  background:"none",border:"none",cursor:"pointer",userSelect:"none"}}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={T.textMid} style={{flexShrink:0}}>
-                  <path d={collapsed["assets"]?"M9 6l6 6-6 6":"M6 9l6 6 6-6"}/>
-                </svg>
-                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={T.teal} strokeWidth={1.5} style={{flexShrink:0}}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-                <span style={{fontSize:13,color:T.text}}>Generated</span>
-              </button>
-              {!collapsed["assets"] && (
-                <div>
-                  {["README.md","bom.csv","diagram.json","firmware.ino"].map(a=>(
-                    <button key={a} style={{width:"100%",display:"flex",alignItems:"center",gap:6,
-                      padding:"2px 8px 2px 26px",background:"none",border:"none",cursor:"pointer",
-                      opacity:pipelineDone?1:0.3}}
-                      onMouseOver={e=>{ if(pipelineDone) e.currentTarget.style.background="rgba(255,255,255,0.05)"; }}
-                      onMouseOut={e=>{ e.currentTarget.style.background="none"; }}>
-                      <span style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:ld(getLang(a))}}/>
-                      <span style={{fontSize:13,color:T.text}}>{a}</span>
-                    </button>
-                  ))}
+              return groups.map(group => (
+                <div key={group.key} style={{marginTop:4}}>
+                  {/* Group label row */}
+                  <button
+                    onClick={()=>setCollapsed(c=>({...c,[group.key]:!c[group.key]}))}
+                    style={{width:"100%",display:"flex",alignItems:"center",gap:6,
+                      padding:"4px 10px 3px 8px",background:"none",border:"none",
+                      cursor:"pointer",userSelect:"none"}}>
+                    <svg width="9" height="9" viewBox="0 0 16 16" fill={T.textDim}
+                      style={{flexShrink:0,transition:"transform 0.12s",
+                        transform:collapsed[group.key]?"rotate(-90deg)":"rotate(0deg)"}}>
+                      <path d="M4 6l4 4 4-4z"/>
+                    </svg>
+                    {group.icon}
+                    <span style={{fontSize:11,fontWeight:500,letterSpacing:"0.04em",
+                      color:T.textDim,textTransform:"lowercase"}}>
+                      {group.label}
+                    </span>
+                  </button>
+
+                  {/* File rows */}
+                  {!collapsed[group.key] && group.files.map(f => {
+                    const isActive = activeTab===f.name;
+                    const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+
+                    // File-type icon
+                    const FileIco = () => {
+                      const ico: Record<string,React.ReactNode> = {
+                        ino: <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#00979d" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>,
+                        cpp: <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#9333ea" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>,
+                        md:  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#c586c0" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>,
+                        csv: <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#4ec9b0" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M10 4v16M14 4v16M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>,
+                        json:<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#fb923c" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h10M7 16h10M3 4h18v16H3z"/></svg>,
+                        svg: <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#4fc1ff" strokeWidth={1.5}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-6-6L3 21"/></svg>,
+                        py:  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#3572A5" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>,
+                        ts:  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#007acc" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>,
+                      };
+                      return <>{ico[ext] ?? <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={T.textDim} strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>}</>;
+                    };
+
+                    return (
+                      <button key={f.name}
+                        onClick={()=>openTab(f.name)}
+                        style={{
+                          width:"100%",display:"flex",alignItems:"center",gap:8,
+                          padding:"4px 10px 4px 28px",
+                          background:isActive?"rgba(0,122,204,0.18)":"transparent",
+                          border:"none",cursor:"pointer",textAlign:"left",
+                          borderLeft:isActive?`2px solid ${T.blueUI}`:"2px solid transparent",
+                          paddingLeft:isActive?"26px":"28px",
+                          transition:"background 0.1s",
+                        }}
+                        onMouseOver={e=>{ if(!isActive) e.currentTarget.style.background="rgba(255,255,255,0.05)"; }}
+                        onMouseOut={e=>{ if(!isActive) e.currentTarget.style.background="transparent"; }}>
+                        <FileIco/>
+                        <span style={{fontSize:13,flex:1,
+                          color:isActive?T.textBright:T.text,
+                          fontWeight:isActive?500:400,
+                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {f.name}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+              ));
+            })()}
           </div>
 
-          {/* sidebar status strip */}
-          <div style={{height:22,flexShrink:0,display:"flex",alignItems:"center",padding:"0 10px",
-            borderTop:`1px solid ${T.border}`,gap:6}}>
+          {/* status strip */}
+          <div style={{height:22,flexShrink:0,display:"flex",alignItems:"center",
+            padding:"0 10px",borderTop:`1px solid ${T.border}`,gap:6}}>
             {pipeActive && (
               <>
                 <motion.div animate={{rotate:360}} transition={{duration:0.8,repeat:Infinity,ease:"linear"}}
-                  style={{width:10,height:10,borderRadius:"50%",border:`1.5px solid ${T.tabBorder}`,borderTopColor:T.blueUI,flexShrink:0}}/>
+                  style={{width:9,height:9,borderRadius:"50%",
+                    border:`1.5px solid ${T.tabBorder}`,borderTopColor:T.blueUI,flexShrink:0}}/>
                 <span style={{fontSize:11,color:T.textMid}}>Generating…</span>
               </>
             )}
-            {pipelineDone && <span style={{fontSize:11,color:T.green}}>✓ Ready</span>}
+            {pipelineDone && (
+              <span style={{fontSize:11,color:T.green}}>
+                ✓ {currentProject?.files.length ?? 0} file{(currentProject?.files.length??0)!==1?"s":""}
+              </span>
+            )}
           </div>
         </aside>
 
