@@ -22,6 +22,8 @@ export const DEFAULT_MODEL_ID = MODEL_MAP[DEFAULT_MODEL];
 /* ── Lazy env readers — called at request time, not module load time ──────── */
 function tokenLBKey():  string   { return process.env.TOKENLB_API_KEY?.trim()  ?? ""; }
 function tokenLBBase(): string   { return (process.env.TOKENLB_BASE_URL ?? "https://api.tokenlab.sh/v1").replace(/\/$/, ""); }
+function bluesmindsKey():  string   { return process.env.BLUESMINDS_API_KEY?.trim()  ?? ""; }
+function bluesmindsBase(): string   { return (process.env.BLUESMINDS_BASE_URL ?? "https://api.bluesminds.com/v1").replace(/\/$/, ""); }
 function groqKeys():    string[] {
   return [
     process.env.GROQ_API_KEY,
@@ -30,15 +32,16 @@ function groqKeys():    string[] {
   ].filter((k): k is string => Boolean(k?.trim()));
 }
 
-/* ── Internal: TokenLB non-streaming ────────────────────────────────────── */
-async function _tokenLB(
+/* ── Internal: Generic OpenAI-compatible non-streaming ──────────────────── */
+async function _openAICompatible(
   messages:  Array<{ role: string; content: any }>,
   modelId:   string,
   maxTokens: number,
+  key:       string,
+  base:      string,
+  providerName: string,
 ): Promise<string> {
-  const key  = tokenLBKey();
-  const base = tokenLBBase();
-  if (!key) throw new Error("TOKENLB_API_KEY is not set in backend/.env");
+  if (!key) throw new Error(`${providerName} API key is not set`);
 
   const res = await fetch(`${base}/chat/completions`, {
     method:  "POST",
@@ -48,10 +51,26 @@ async function _tokenLB(
 
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`TokenLB ${res.status}: ${txt.slice(0, 200)}`);
+    throw new Error(`${providerName} ${res.status}: ${txt.slice(0, 200)}`);
   }
   const json = await res.json() as any;
   return String(json?.choices?.[0]?.message?.content ?? "").trim();
+}
+
+async function _tokenLB(
+  messages:  Array<{ role: string; content: any }>,
+  modelId:   string,
+  maxTokens: number,
+): Promise<string> {
+  return _openAICompatible(messages, modelId, maxTokens, tokenLBKey(), tokenLBBase(), "TokenLB");
+}
+
+async function _bluesminds(
+  messages:  Array<{ role: string; content: any }>,
+  modelId:   string,
+  maxTokens: number,
+): Promise<string> {
+  return _openAICompatible(messages, modelId, maxTokens, bluesmindsKey(), bluesmindsBase(), "Bluesminds");
 }
 
 /* ── Internal: Groq non-streaming (key rotation) ────────────────────────── */
@@ -81,31 +100,42 @@ export async function callLLM(
 ): Promise<string> {
   const modelId = MODEL_MAP[modelKey] ?? DEFAULT_MODEL_ID;
 
-  // 1. TokenLB with requested model
+  // 1. Try TokenLB
   try {
     return await _tokenLB(messages, modelId, maxTokens);
   } catch (e1: any) {
     console.warn(`[llm] TokenLB(${modelId}) failed: ${String(e1?.message).slice(0, 80)}`);
 
-    // 2. Groq if keys exist
+    // 2. Try Bluesminds fallback
+    const bmKey = bluesmindsKey();
+    if (bmKey) {
+      try {
+        console.warn(`[llm] Falling back to Bluesminds(${modelId})…`);
+        return await _bluesminds(messages, modelId, maxTokens);
+      } catch (e2: any) {
+        console.warn(`[llm] Bluesminds failed: ${String(e2?.message).slice(0, 80)}`);
+      }
+    }
+
+    // 3. Groq if keys exist
     const gKeys = groqKeys();
     if (gKeys.length > 0) {
       try {
         console.warn("[llm] Falling back to Groq…");
         return await _groq(messages);
-      } catch (e2: any) {
-        console.warn(`[llm] Groq failed: ${String(e2?.message).slice(0, 80)}`);
+      } catch (e3: any) {
+        console.warn(`[llm] Groq failed: ${String(e3?.message).slice(0, 80)}`);
       }
     }
 
-    // 3. TokenLB with WU Lite as last resort
+    // 4. TokenLB with WU Lite as last resort
     const liteId = MODEL_MAP["WU Lite"];
     if (liteId !== modelId) {
       try {
         console.warn(`[llm] Retrying TokenLB with ${liteId}…`);
         return await _tokenLB(messages, liteId, maxTokens);
-      } catch (e3: any) {
-        throw new Error(`All LLM providers failed. Last: ${String(e3?.message).slice(0, 120)}`);
+      } catch (e4: any) {
+        throw new Error(`All LLM providers failed. Last: ${String(e4?.message).slice(0, 120)}`);
       }
     }
     throw new Error(`LLM call failed: ${String(e1?.message).slice(0, 120)}`);
@@ -121,18 +151,10 @@ export async function streamTokenLB(
   onError:   (err: string) => void,
   maxTokens  = 1024,
 ): Promise<void> {
-  const key  = tokenLBKey();
-  const base = tokenLBBase();
-
-  if (!key) {
-    onError("TOKENLB_API_KEY is not set in backend/.env — add it and restart the backend.");
-    return;
-  }
-
   let usedFallback: string | undefined;
 
   /* ── inner: stream one model ─────────────────────────────────────────── */
-  const tryStream = async (mId: string): Promise<void> => {
+  const tryStream = async (mId: string, key: string, base: string, providerName: string): Promise<void> => {
     const res = await fetch(`${base}/chat/completions`, {
       method:  "POST",
       headers: {
@@ -151,7 +173,7 @@ export async function streamTokenLB(
 
     if (!res.ok || !res.body) {
       const txt = await res.text();
-      throw new Error(`TokenLB ${res.status}: ${txt.slice(0, 200)}`);
+      throw new Error(`${providerName} ${res.status}: ${txt.slice(0, 200)}`);
     }
 
     const reader  = res.body.getReader();
@@ -184,14 +206,30 @@ export async function streamTokenLB(
     if (full) onDone(full, usedFallback);
   };
 
-  // 1. Try requested model
+  // 1. Try requested model on TokenLB
   try {
-    await tryStream(modelId);
+    const key = tokenLBKey();
+    const base = tokenLBBase();
+    if (!key) throw new Error("TOKENLB_API_KEY is not set");
+    await tryStream(modelId, key, base, "TokenLB");
     return;
   } catch (e1: any) {
     console.warn(`[llm] Stream TokenLB(${modelId}) failed: ${String(e1?.message).slice(0, 80)}`);
 
-    // 2. Groq fallback (word-by-word simulated streaming)
+    // 2. Try Bluesminds fallback
+    const bmKey = bluesmindsKey();
+    if (bmKey) {
+      try {
+        console.warn(`[llm] Stream → Bluesminds fallback(${modelId})…`);
+        usedFallback = "bluesminds";
+        await tryStream(modelId, bmKey, bluesmindsBase(), "Bluesminds");
+        return;
+      } catch (e2: any) {
+        console.warn(`[llm] Bluesminds stream fallback failed: ${String(e2?.message).slice(0, 80)}`);
+      }
+    }
+
+    // 3. Groq fallback (word-by-word simulated streaming)
     const gKeys = groqKeys();
     if (gKeys.length > 0) {
       try {
@@ -206,18 +244,21 @@ export async function streamTokenLB(
         }
         onDone(full, "groq");
         return;
-      } catch (e2: any) {
-        console.warn(`[llm] Groq stream fallback failed: ${String(e2?.message).slice(0, 80)}`);
+      } catch (e3: any) {
+        console.warn(`[llm] Groq stream fallback failed: ${String(e3?.message).slice(0, 80)}`);
       }
     }
 
-    // 3. TokenLB with WU Lite
+    // 4. TokenLB retry with WU Lite
     const liteId = MODEL_MAP["WU Lite"];
     if (liteId !== modelId) {
       try {
         console.warn(`[llm] Stream retry with ${liteId}…`);
         usedFallback = liteId;
-        await tryStream(liteId);
+        const key = tokenLBKey();
+        const base = tokenLBBase();
+        if (!key) throw new Error("TOKENLB_API_KEY is not set");
+        await tryStream(liteId, key, base, "TokenLB");
         return;
       } catch { /* fall through */ }
     }
