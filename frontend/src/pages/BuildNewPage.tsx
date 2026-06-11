@@ -237,7 +237,7 @@ export default function BuildNewPage() {
   const navigate     = useNavigate();
   const location     = useLocation();
   const { authUser } = useAuthStore();
-  const { currentProject, loadProject, isLoading, updateFile, addFile, setActiveFile } = useProjectStore();
+  const { currentProject, loadProject, isLoading, updateFile, addFile, setActiveFile, updateProjectFields } = useProjectStore();
 
   /* layout */
   const [leftW,    setLeftW]    = useState(230);
@@ -330,9 +330,22 @@ export default function BuildNewPage() {
       // Restore state without re-running anything
       setPipelineDone(true);
       setPipelinePct(100);
-      // Show the initial prompt as the user message (use description as fallback)
-      const displayPrompt = routerPrompt || currentProject.description;
-      setMsgs([{ id: "u-init", role: "user", content: displayPrompt, streaming: false }]);
+      
+      // Restore chat history from project if it exists
+      if (currentProject.chatHistory && currentProject.chatHistory.length > 0) {
+        const restored = currentProject.chatHistory.map((m: any, idx: number) => ({
+          id: m.id || `${m.role}-${idx}`,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          streaming: false
+        }));
+        setMsgs(restored);
+      } else {
+        // Show the initial prompt as the user message (use description as fallback)
+        const displayPrompt = routerPrompt || currentProject.description;
+        setMsgs([{ id: "u-init", role: "user", content: displayPrompt, streaming: false }]);
+      }
+      
       addLog("info", `[wireup] Restored project: ${currentProject.description}`);
       return;
     }
@@ -1204,6 +1217,7 @@ export default function BuildNewPage() {
               setPipelinePct(0);
               setStages([]);
               setMsgs([]);
+              if (id) updateProjectFields(id, { chatHistory: [] });
               if (currentProject) {
                 setQuestionnaireIdea(currentProject.description);
                 setShowQuestionnaire(true);

@@ -174,6 +174,22 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
       }
 
       send("done", { content: visibleText, editsApplied: edits.length });
+
+      // Save chat history to DB
+      if (projectId && req.user?._id) {
+        try {
+          await Project.findOneAndUpdate(
+            { _id: projectId, owner: req.user._id },
+            { chatHistory: [
+                ...messages,
+                { role: "assistant" as const, content: visibleText }
+              ]
+            }
+          );
+        } catch (e) {
+          console.error("[chat] Failed to save chat history in editMode:", e);
+        }
+      }
     } catch (err: any) {
       send("error", { error: err?.message ?? "Edit failed" });
     }
@@ -186,7 +202,23 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
   await streamTokenLB(
     payload, modelId,
     (token, full) => send("token", { token, full }),
-    (full, fallback) => send("done", { content: full, ...(fallback ? { fallback } : {}) }),
+    async (full, fallback) => {
+      send("done", { content: full, ...(fallback ? { fallback } : {}) });
+      if (projectId && req.user?._id) {
+        try {
+          await Project.findOneAndUpdate(
+            { _id: projectId, owner: req.user._id },
+            { chatHistory: [
+                ...messages,
+                { role: "assistant" as const, content: full }
+              ]
+            }
+          );
+        } catch (e) {
+          console.error("[chat] Failed to save chat history in streamTokenLB:", e);
+        }
+      }
+    },
     (err)  => send("error", { error: err }),
     1024,
   );

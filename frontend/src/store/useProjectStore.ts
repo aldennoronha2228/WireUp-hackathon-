@@ -12,6 +12,11 @@ export interface Project {
   description: string;
   files: ProjectFile[];
   activeFile: string;
+  chatHistory?: Array<{
+    id?: string;
+    role: "user" | "assistant";
+    content: string;
+  }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,6 +30,7 @@ interface ProjectState {
   updateFile: (projectId: string, fileName: string, content: string) => Promise<void>;
   addFile: (projectId: string, file: ProjectFile) => Promise<void>;
   setActiveFile: (projectId: string, fileName: string) => Promise<void>;
+  updateProjectFields: (projectId: string, fields: Partial<Project>) => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -93,6 +99,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ currentProject: { ...project, activeFile: fileName } });
     try {
       await axiosInstance.put(`/project/${projectId}`, { activeFile: fileName });
+    } catch {
+      // silently fail
+    }
+  },
+
+  updateProjectFields: async (projectId: string, fields: Partial<Project>) => {
+    const project = get().currentProject;
+    if (!project) return;
+    set({ currentProject: { ...project, ...fields } });
+    try {
+      await axiosInstance.put(`/project/${projectId}`, fields);
     } catch {
       // silently fail
     }

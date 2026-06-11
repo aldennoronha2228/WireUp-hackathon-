@@ -9,6 +9,11 @@ export interface IProject extends Document {
     content: string;
   }>;
   activeFile: string;
+  chatHistory: Array<{
+    id?: string;
+    role: "user" | "assistant";
+    content: string;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +30,13 @@ const projectSchema = new Schema<IProject>(
       },
     ],
     activeFile: { type: String, default: "" },
+    chatHistory: [
+      {
+        id: { type: String },
+        role: { type: String, required: true },
+        content: { type: String, default: "" }
+      }
+    ]
   },
   { timestamps: true }
 );

@@ -64,7 +64,7 @@ export const getProject = async (req: AuthRequest, res: Response) => {
 // PUT /api/project/:id
 export const updateProject = async (req: AuthRequest, res: Response) => {
   try {
-    const { description, files, activeFile } = req.body;
+    const { description, files, activeFile, chatHistory } = req.body;
 
     const project = await Project.findOne({
       _id: req.params.id,
@@ -76,6 +76,7 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
     if (description) project.description = description.trim();
     if (files) project.files = files;
     if (activeFile !== undefined) project.activeFile = activeFile;
+    if (chatHistory !== undefined) project.chatHistory = chatHistory;
 
     await project.save();
     res.json(project);
