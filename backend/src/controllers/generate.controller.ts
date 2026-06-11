@@ -12,7 +12,7 @@ const STAGES = [
   {
     key:   "requirements",
     label: "Requirements Analysis",
-    prompt: (idea: string) =>
+    prompt: (idea: string, _?: string) =>
       `You are an expert hardware/software architect. The user wants to build: "${idea}".
 List 3-5 clear requirements in bullet points: functional goals, constraints, user needs, and success criteria. Be specific. No preamble.`,
     fileKey: null,
@@ -20,7 +20,7 @@ List 3-5 clear requirements in bullet points: functional goals, constraints, use
   {
     key:   "architecture",
     label: "Architecture Planning",
-    prompt: (idea: string) =>
+    prompt: (idea: string, _?: string) =>
       `You are an expert systems architect. The user wants to build: "${idea}".
 Outline the high-level system architecture in 3-5 bullet points: major subsystems, how they connect, key technologies, and data flow. Be technical and specific.`,
     fileKey: null,
@@ -28,7 +28,7 @@ Outline the high-level system architecture in 3-5 bullet points: major subsystem
   {
     key:   "components",
     label: "Component Selection",
-    prompt: (idea: string) =>
+    prompt: (idea: string, _?: string) =>
       `You are an expert hardware engineer. The user wants to build: "${idea}".
 List the key hardware components with specific part numbers in 4-5 bullet points. For each: name, purpose, and why it was chosen. Include microcontrollers, sensors, power, and communication modules.`,
     fileKey: null,
@@ -36,7 +36,7 @@ List the key hardware components with specific part numbers in 4-5 bullet points
   {
     key:      "circuit",
     label:    "Circuit Generation",
-    prompt: (idea: string) =>
+    prompt: (idea: string, _?: string) =>
       `You are an expert electrical engineer. The user wants to build: "${idea}".
 Describe the circuit design in 4-5 bullet points: power supply, signal connections, communication buses (I2C/SPI/UART), pin assignments, and any protection circuits. Reference specific pins and voltages.`,
     fileKey: null,
@@ -44,7 +44,7 @@ Describe the circuit design in 4-5 bullet points: power supply, signal connectio
   {
     key:   "firmware",
     label: "Firmware Generation",
-    prompt: (idea: string) =>
+    prompt: (idea: string, _?: string) =>
       `You are an expert embedded systems engineer. The user wants to build: "${idea}".
 Outline the firmware architecture in 3-5 bullet points: programming language, key libraries/frameworks, main control loop, interrupt handlers, and communication protocols. Be specific about implementation.`,
     fileKey: null,
@@ -52,7 +52,7 @@ Outline the firmware architecture in 3-5 bullet points: programming language, ke
   {
     key:   "validation",
     label: "Simulation Validation",
-    prompt: (idea: string) =>
+    prompt: (idea: string, _?: string) =>
       `You are an expert hardware validation engineer. The user wants to build: "${idea}".
 Describe the validation approach in 3-4 bullet points: what to test, how to simulate, expected behavior, and success criteria.`,
     fileKey: null,
@@ -60,15 +60,38 @@ Describe the validation approach in 3-4 bullet points: what to test, how to simu
   {
     key:   "documentation",
     label: "Documentation Creation",
-    prompt: (idea: string) =>
+    prompt: (idea: string, _?: string) =>
       `You are a technical documentation expert. The user wants to build: "${idea}".
 Outline the documentation package in 3-4 bullet points: README sections, BOM format, assembly instructions, and usage guide.`,
     fileKey: null,
   },
   {
+    key:   "selfcheck",
+    label: "Verification & Self-Checking",
+    prompt: (idea: string, filesStr = "") =>
+      `You are a strict hardware QA verifier. The user wants to build: "${idea}".
+Review the generated files for this project to check if they are correct or have errors:
+${filesStr}
+
+Please perform a rigorous self-checking audit of the files. Check for:
+1. Pin Mismatches: Check if pins defined in firmware.ino, connected in diagram.json, and listed in pins.csv match.
+2. Wiring Integrity: Verify if diagram.json has correct connections (VCC connected to power, GND to ground, and data pins to correct MCU pins).
+3. Code Completeness: Verify if firmware.ino compiles conceptually (correct libraries, variables defined, setup/loop complete).
+4. JSON Validity: Check if diagram.json is valid JSON structure.
+
+Provide a Verification Checklist in this exact format:
+- [ ] Pin Mismatches: [PASS/FAIL] (reasons and details)
+- [ ] Wiring Integrity: [PASS/FAIL] (reasons and details)
+- [ ] Code Completeness: [PASS/FAIL] (reasons and details)
+- [ ] JSON Validity: [PASS/FAIL] (reasons and details)
+
+List any errors or warnings found, and how to fix them. Be extremely critical. If anything is wrong, state it clearly!`,
+    fileKey: null,
+  },
+  {
     key:   "summary",
     label: "Summary",
-    prompt: (idea: string) =>
+    prompt: (idea: string, _?: string) =>
       `The user wants to build: "${idea}".
 Write a 2-3 sentence project summary. State: what it does, the main components, and one key implementation note. Be direct. No markdown. No bullet points. Maximum 60 words.`,
     fileKey: null,
@@ -207,6 +230,20 @@ Include:
 
 Keep it concise and practical.`,
   },
+  {
+    filename: "self_check.md",
+    language: "Markdown",
+    folder:   "docs",
+    stageKey: "selfcheck",
+    prompt: (idea: string, context: string) =>
+      `Create a detailed QA Verification Report and Self-Checking List based on the verification analysis.
+Context:
+${context}
+
+Format:
+# QA Verification & Self-Checking Report
+Describe the overall system health, listing each check (Pin Mismatches, Wiring Integrity, Code Completeness, JSON Validity) with [PASS] or [FAIL], detailed notes, and recommended fixes for any failed checks.`,
+  },
 ];
 
 /* ── SSE sender ─────────────────────────────────────────────────────────── */
@@ -258,6 +295,7 @@ export const generatePipeline = async (req: AuthRequest, res: Response) => {
 
   const send    = sender(res);
   const context: Record<string, string> = {};  // accumulated analysis per stage
+  const generatedFiles: Record<string, string> = {}; // collected files for verifier stage
 
   try {
     // ── Generate a clean project name first ──────────────────────────────
@@ -293,9 +331,14 @@ Reply with ONLY the project name, nothing else.`
         index: i, key: stage.key, label: stage.label, total: STAGES.length,
       });
 
-      const maxTok = stage.key === "summary" ? 120 : 600;
+      // Prepare files text string to pass into verifier stage
+      const filesStr = Object.entries(generatedFiles)
+        .map(([name, content]) => `--- File: ${name} ---\n${content.slice(0, 1500)}`)
+        .join("\n\n");
+
+      const maxTok = stage.key === "summary" ? 120 : (stage.key === "selfcheck" ? 1200 : 600);
       const content_text = await callLLM(
-        [{ role: "user", content: stage.prompt(idea.trim()) }],
+        [{ role: "user", content: stage.prompt(idea.trim(), filesStr) }],
         modelKey, maxTok,
       );
 
@@ -352,6 +395,9 @@ Reply with ONLY the project name, nothing else.`
               fileContent,
             );
           }
+
+          // Save copy in memory for subsequent selfcheck stages
+          generatedFiles[fp.filename] = fileContent;
 
           send("file_created", {
             filename: fp.filename,

@@ -44,13 +44,14 @@ export const MODEL_MAP: Record<string, string> = {
   "Claude Opus":   "claude-opus-4-8",
   "Claude Haiku":  "claude-haiku-4-5-20251001",
   "Gemini Flash":  "gemini-3-flash-preview",
+  "Groq Llama 3.3":"llama-3.3-70b-versatile",
   // "Auto" is handled dynamically — see resolveAutoModel()
 };
 
 /* ── Auto mode: rotate randomly through cheap/fast models ────────────── */
 const AUTO_POOL = [
   "llama-3.3-70b-versatile",    // Groq - fast & working
-  "gpt-3.5-turbo-0613",         // Bluesminds - cheap & working
+  "gpt-4o",                     // Bluesminds - gpt-4o working
   "vllm-current",               // Bluesminds reasoning - working
 ];
 function resolveAutoModel(): string {
@@ -113,7 +114,7 @@ async function _openAICompatible(
   if (!key) throw new Error(`${providerName} API key is not set`);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for non-streaming
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for non-streaming
 
   try {
     const res = await fetch(`${base}/chat/completions`, {
@@ -159,27 +160,37 @@ async function _groq(
   attempt = 0,
 ): Promise<string> {
   const keys = groqKeys();
-  if (attempt >= keys.length) throw new Error("All Groq keys exhausted");
+  if (keys.length === 0) throw new Error("No Groq keys configured");
+  
+  const maxAttempts = keys.length * 2;
+  if (attempt >= maxAttempts) throw new Error("All Groq keys exhausted after retry cycles");
 
+  const keyIndex = attempt % keys.length;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method:  "POST",
-      headers: { Authorization: `Bearer ${keys[attempt]}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${keys[keyIndex]}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: modelId, messages, max_tokens: 600, temperature: 0.7 }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
 
-    if (res.status === 429 || res.status === 503) return _groq(messages, modelId, attempt + 1);
+    if (res.status === 429 || res.status === 503) {
+      console.warn(`[llm] Groq key index ${keyIndex} rate limited (status ${res.status}). Waiting 2s before trying next key...`);
+      await new Promise(r => setTimeout(r, 2000));
+      return _groq(messages, modelId, attempt + 1);
+    }
     if (!res.ok) { const txt = await res.text(); throw new Error(`Groq ${res.status}: ${txt.slice(0, 200)}`); }
     const json = await res.json() as any;
     return String(json?.choices?.[0]?.message?.content ?? "").trim();
-  } catch (err) {
+  } catch (err: any) {
     clearTimeout(timeoutId);
-    throw err;
+    console.warn(`[llm] Groq key index ${keyIndex} failed: ${err.message}. Retrying...`);
+    await new Promise(r => setTimeout(r, 1000));
+    return _groq(messages, modelId, attempt + 1);
   }
 }
 
@@ -223,7 +234,8 @@ export async function callLLM(
       return await provider.call();
     } catch (err: any) {
       console.warn(`[llm] ${provider.name}(${modelId}) failed: ${String(err?.message).slice(0, 80)}`);
-      blacklistProvider(provider.name, modelId, 120000); // Blacklist for 2 minutes
+      const blacklistDuration = provider.name === "Groq" ? 10000 : 120000;
+      blacklistProvider(provider.name, modelId, blacklistDuration);
     }
   }
 
@@ -240,11 +252,11 @@ export async function callLLM(
     }
   }
 
-  // 4. Bluesminds with gpt-3.5-turbo-0613 fallback
-  if (bluesmindsKey() && modelId !== "gpt-3.5-turbo-0613") {
+  // 4. Bluesminds with vllm-current fallback
+  if (bluesmindsKey() && modelId !== "vllm-current") {
     try {
-      console.warn("[llm] Falling back to Bluesminds (gpt-3.5-turbo-0613)…");
-      return await _bluesminds(messages, "gpt-3.5-turbo-0613", maxTokens);
+      console.warn("[llm] Falling back to Bluesminds (vllm-current)…");
+      return await _bluesminds(messages, "vllm-current", maxTokens);
     } catch (e4: any) {
       console.warn(`[llm] Bluesminds fallback failed: ${String(e4?.message).slice(0, 80)}`);
     }
@@ -341,9 +353,10 @@ export async function streamTokenLB(
   const isClaude = modelId.startsWith("claude-");
   const isGroq = modelId === GROQ_MODEL || modelId.startsWith("llama-");
 
+  const gKeys = groqKeys();
   const providers = isGroq
     ? [
-        { name: "Groq", key: groqKeys()[0] ?? "", base: "https://api.groq.com/openai/v1" },
+        ...gKeys.map((k, idx) => ({ name: `Groq-Key-${idx}`, key: k, base: "https://api.groq.com/openai/v1" })),
         { name: "Bluesminds", key: bluesmindsKey(), base: bluesmindsBase() },
         { name: "TokenLB", key: tokenLBKey(), base: tokenLBBase() }
       ]
@@ -373,7 +386,8 @@ export async function streamTokenLB(
       return;
     } catch (err: any) {
       console.warn(`[llm] Stream ${provider.name}(${modelId}) failed: ${String(err?.message).slice(0, 80)}`);
-      blacklistProvider(provider.name, modelId, 120000); // Blacklist for 2 minutes
+      const blacklistDuration = provider.name.startsWith("Groq-Key") ? 10000 : 120000;
+      blacklistProvider(provider.name, modelId, blacklistDuration);
     }
   }
 
@@ -401,10 +415,10 @@ export async function streamTokenLB(
   }
 
   // Fallback to Bluesminds with a known working model
-  if (bluesmindsKey() && modelId !== "gpt-3.5-turbo-0613") {
+  if (bluesmindsKey() && modelId !== "vllm-current") {
     try {
-      console.warn("[llm] Stream → Bluesminds fallback (gpt-3.5-turbo-0613)…");
-      await tryStream("gpt-3.5-turbo-0613", bluesmindsKey(), bluesmindsBase(), "Bluesminds");
+      console.warn("[llm] Stream → Bluesminds fallback (vllm-current)…");
+      await tryStream("vllm-current", bluesmindsKey(), bluesmindsBase(), "Bluesminds");
       return;
     } catch (e4: any) {
       console.warn(`[llm] Bluesminds fallback failed: ${String(e4?.message).slice(0, 80)}`);

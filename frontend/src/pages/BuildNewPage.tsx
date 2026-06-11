@@ -184,6 +184,7 @@ const MODELS = [
   { key: "Claude Haiku",  id: "claude-haiku-4-5-20251001", sub: "Low latency",                        group: "Fast Models" },
   { key: "GPT-4o Mini",   id: "gpt-4o-mini",             sub: "Quick responses",                    group: "Fast Models" },
   { key: "Gemini Flash",  id: "gemini-3-flash-preview",  sub: "Fastest generation",                 group: "Fast Models" },
+  { key: "Groq Llama 3.3", id: "llama-3.3-70b-versatile", sub: "Ultra-fast open source model",        group: "Fast Models" },
 ] as const;
 type ModelKey = typeof MODELS[number]["key"];
 
