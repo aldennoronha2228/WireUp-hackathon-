@@ -19,7 +19,7 @@ export const MODEL_MAP: Record<string, string> = {
   "GPT-4o Mini":   "gpt-4o-mini",
   "DeepSeek V3":   "deepseek-v3",
   "DeepSeek R1":   "deepseek-reasoner",
-  "Kimi K2.6":     "kimi-k2.6",
+  "Kimi K2.6":     "moonshotai/kimi-k2.6",
   "GPT-3.5 Turbo": "gpt-3.5-turbo-0613",
   "Gemini 3 Flash":"gemini-3-flash-preview",
 };
@@ -29,8 +29,31 @@ export const DEFAULT_MODEL_ID = MODEL_MAP[DEFAULT_MODEL];
 /* ── Lazy env readers — called at request time, not module load time ──────── */
 function tokenLBKey():  string   { return process.env.TOKENLB_API_KEY?.trim()  ?? ""; }
 function tokenLBBase(): string   { return (process.env.TOKENLB_BASE_URL ?? "https://api.tokenlab.sh/v1").replace(/\/$/, ""); }
-function bluesmindsKey():  string   { return process.env.BLUESMINDS_API_KEY?.trim()  ?? ""; }
-function bluesmindsBase(): string   { return (process.env.BLUESMINDS_BASE_URL ?? "https://api.bluesminds.com/v1").replace(/\/$/, ""); }
+function parseBluesmindsConfig(): { key: string; base: string } {
+  let key = process.env.BLUESMINDS_API_KEY?.trim() ?? "";
+  let base = process.env.BLUESMINDS_BASE_URL?.trim() ?? "https://api.bluesminds.com/v1";
+
+  const connStr = process.env.BLUESMINDS_CONNECTION_STRING?.trim();
+  const sourceStr = connStr || (key.startsWith("{") ? key : "");
+  if (sourceStr) {
+    try {
+      const parsed = JSON.parse(sourceStr);
+      if (parsed.key) key = parsed.key.trim();
+      if (parsed.url) base = parsed.url.trim();
+    } catch (e) {
+      console.warn("[llm] Failed to parse Bluesminds connection string JSON:", e);
+    }
+  }
+
+  base = base.replace(/\/$/, "");
+  if (base && base.includes("bluesminds.com") && !base.endsWith("/v1")) {
+    base = `${base}/v1`;
+  }
+  return { key, base };
+}
+
+function bluesmindsKey():  string   { return parseBluesmindsConfig().key; }
+function bluesmindsBase(): string   { return parseBluesmindsConfig().base; }
 function groqKeys():    string[] {
   return [
     process.env.GROQ_API_KEY,
