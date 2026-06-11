@@ -1124,7 +1124,18 @@ export default function BuildNewPage() {
                        : "think") as ReasoningStep["icon"],
             }))}
             messages={msgs
-              .filter(m => !stages.find(s => s.key === m.id))  // excludes all stage msgs incl. summary
+              .filter(m => {
+                // Exclude pipeline thinking placeholder
+                if (m.id === "thinking-init") return false;
+                // Exclude all pipeline stage messages (by key pattern)
+                const pipelineKeys = new Set([
+                  "requirements","architecture","components","circuit",
+                  "firmware","validation","documentation","summary",
+                  ...stages.map(s => s.key),
+                ]);
+                if (pipelineKeys.has(m.id)) return false;
+                return true;
+              })
               .map((m): AIChatMessage => ({
                 id:       m.id,
                 role:     m.role as "user" | "assistant",
