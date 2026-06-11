@@ -168,13 +168,16 @@ function StageIcon({ s }: { s: StageState }) {
 
 /* ─── Model catalogue (matches backend chat.controller.ts) ─────────────── */
 const MODELS = [
-  { key: "WU Lite",     id: "claude-haiku-4-5-20251001", sub: "claude-haiku · Fast"       },
-  { key: "WU Pro",      id: "claude-sonnet-4-6",          sub: "claude-sonnet · Balanced"  },
-  { key: "WU Max",      id: "claude-opus-4-8",             sub: "claude-opus · Powerful"    },
-  { key: "GPT-4o",      id: "gpt-4o",                      sub: "gpt-4o · Smart & fast"     },
-  { key: "GPT-4o Mini", id: "gpt-4o-mini",             sub: "gpt-4o-mini · Fast & light"},
-  { key: "DeepSeek V3", id: "deepseek-v3",             sub: "deepseek-v3 · Efficient"   },
-  { key: "DeepSeek R1", id: "deepseek-reasoner",       sub: "deepseek-reasoner · Reasoning" },
+  { key: "WU Lite",       id: "claude-haiku-4-5-20251001", sub: "claude-haiku · Fast"       },
+  { key: "WU Pro",        id: "claude-sonnet-4-6",          sub: "claude-sonnet · Balanced"  },
+  { key: "WU Max",        id: "claude-opus-4-8",             sub: "claude-opus · Powerful"    },
+  { key: "GPT-4o",        id: "gpt-4o",                      sub: "gpt-4o · Smart & fast"     },
+  { key: "GPT-4o Mini",   id: "gpt-4o-mini",             sub: "gpt-4o-mini · Fast & light"},
+  { key: "DeepSeek V3",   id: "deepseek-v3",             sub: "deepseek-v3 · Efficient"   },
+  { key: "DeepSeek R1",   id: "deepseek-reasoner",       sub: "deepseek-reasoner · Reasoning" },
+  { key: "Kimi K2.6",     id: "kimi-k2.6",               sub: "kimi-k2.6 · MoE LLM" },
+  { key: "GPT-3.5 Turbo", id: "gpt-3.5-turbo-0613",      sub: "gpt-3.5 · Legacy fast" },
+  { key: "Gemini 3 Flash",id: "gemini-3-flash-preview",  sub: "gemini-3-flash · Smart preview" },
 ] as const;
 type ModelKey = typeof MODELS[number]["key"];
 

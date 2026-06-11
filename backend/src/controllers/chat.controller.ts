@@ -6,13 +6,16 @@ import Project from "../models/project.model";
 interface AuthRequest extends Request { user?: IUser; }
 
 export const CHAT_MODEL_INFO = [
-  { key: "WU Lite",     id: MODEL_MAP["WU Lite"],     sub: "claude-haiku · Fast" },
-  { key: "WU Pro",      id: MODEL_MAP["WU Pro"],      sub: "claude-sonnet · Balanced" },
-  { key: "WU Max",      id: MODEL_MAP["WU Max"],      sub: "claude-opus · Powerful" },
-  { key: "GPT-4o",      id: MODEL_MAP["GPT-4o"],      sub: "gpt-4o · Smart & fast" },
-  { key: "GPT-4o Mini", id: MODEL_MAP["GPT-4o Mini"], sub: "gpt-4o-mini · Fast & light" },
-  { key: "DeepSeek V3", id: MODEL_MAP["DeepSeek V3"], sub: "deepseek-v3 · Efficient" },
-  { key: "DeepSeek R1", id: MODEL_MAP["DeepSeek R1"], sub: "deepseek-reasoner · Reasoning" },
+  { key: "WU Lite",       id: MODEL_MAP["WU Lite"],       sub: "claude-haiku · Fast" },
+  { key: "WU Pro",        id: MODEL_MAP["WU Pro"],        sub: "claude-sonnet · Balanced" },
+  { key: "WU Max",        id: MODEL_MAP["WU Max"],        sub: "claude-opus · Powerful" },
+  { key: "GPT-4o",        id: MODEL_MAP["GPT-4o"],        sub: "gpt-4o · Smart & fast" },
+  { key: "GPT-4o Mini",   id: MODEL_MAP["GPT-4o Mini"],   sub: "gpt-4o-mini · Fast & light" },
+  { key: "DeepSeek V3",   id: MODEL_MAP["DeepSeek V3"],   sub: "deepseek-v3 · Efficient" },
+  { key: "DeepSeek R1",   id: MODEL_MAP["DeepSeek R1"],   sub: "deepseek-reasoner · Reasoning" },
+  { key: "Kimi K2.6",     id: MODEL_MAP["Kimi K2.6"],     sub: "kimi-k2.6 · MoE LLM" },
+  { key: "GPT-3.5 Turbo", id: MODEL_MAP["GPT-3.5 Turbo"], sub: "gpt-3.5 · Legacy fast" },
+  { key: "Gemini 3 Flash",id: MODEL_MAP["Gemini 3 Flash"],sub: "gemini-3-flash · Smart preview" },
 ];
 
 /* ── Detect if message is an edit request ────────────────────────────────── */

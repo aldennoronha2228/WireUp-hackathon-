@@ -12,13 +12,16 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 /* ── Model map ───────────────────────────────────────────────────────────── */
 export const MODEL_MAP: Record<string, string> = {
-  "WU Lite":     "claude-haiku-4-5-20251001",
-  "WU Pro":      "claude-sonnet-4-6",
-  "WU Max":      "claude-opus-4-8",
-  "GPT-4o":      "gpt-4o",
-  "GPT-4o Mini": "gpt-4o-mini",
-  "DeepSeek V3": "deepseek-v3",
-  "DeepSeek R1": "deepseek-reasoner",
+  "WU Lite":       "claude-haiku-4-5-20251001",
+  "WU Pro":        "claude-sonnet-4-6",
+  "WU Max":        "claude-opus-4-8",
+  "GPT-4o":        "gpt-4o",
+  "GPT-4o Mini":   "gpt-4o-mini",
+  "DeepSeek V3":   "deepseek-v3",
+  "DeepSeek R1":   "deepseek-reasoner",
+  "Kimi K2.6":     "kimi-k2.6",
+  "GPT-3.5 Turbo": "gpt-3.5-turbo-0613",
+  "Gemini 3 Flash":"gemini-3-flash-preview",
 };
 export const DEFAULT_MODEL    = "WU Pro";
 export const DEFAULT_MODEL_ID = MODEL_MAP[DEFAULT_MODEL];
