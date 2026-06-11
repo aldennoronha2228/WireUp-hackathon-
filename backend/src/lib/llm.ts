@@ -32,7 +32,7 @@ function groqKeys():    string[] {
 
 /* ── Internal: TokenLB non-streaming ────────────────────────────────────── */
 async function _tokenLB(
-  messages:  Array<{ role: string; content: string }>,
+  messages:  Array<{ role: string; content: any }>,
   modelId:   string,
   maxTokens: number,
 ): Promise<string> {
@@ -56,7 +56,7 @@ async function _tokenLB(
 
 /* ── Internal: Groq non-streaming (key rotation) ────────────────────────── */
 async function _groq(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: any }>,
   attempt = 0,
 ): Promise<string> {
   const keys = groqKeys();
@@ -75,7 +75,7 @@ async function _groq(
 
 /* ── Public: resilient non-streaming ────────────────────────────────────── */
 export async function callLLM(
-  messages:  Array<{ role: string; content: string }>,
+  messages:  Array<{ role: string; content: any }>,
   modelKey   = DEFAULT_MODEL,
   maxTokens  = 600,
 ): Promise<string> {
@@ -114,7 +114,7 @@ export async function callLLM(
 
 /* ── Public: streaming via TokenLB (with fallbacks) ─────────────────────── */
 export async function streamTokenLB(
-  messages:  Array<{ role: string; content: string }>,
+  messages:  Array<{ role: string; content: any }>,
   modelId:   string,
   onToken:   (token: string, full: string) => void,
   onDone:    (full: string, fallback?: string) => void,

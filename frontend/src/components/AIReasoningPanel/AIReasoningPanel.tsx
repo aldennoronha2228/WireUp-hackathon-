@@ -53,6 +53,7 @@ export interface ReasoningStep {
 export interface ChatMessage {
   id: string; role: "user" | "assistant";
   content: string; streaming: boolean; model?: string;
+  images?: string[];
 }
 interface Props {
   projectTitle: string; steps: ReasoningStep[];
@@ -60,7 +61,7 @@ interface Props {
   chatInput: string; chatBusy: boolean;
   pipelineDone: boolean; pipelineActive: boolean; pipelinePct: number;
   model: string;
-  onChatInput: (v: string) => void; onSend: () => void; onStop: () => void;
+  onChatInput: (v: string) => void; onSend: (attachments: string[]) => void; onStop: () => void;
   onNewChat: () => void; onModelChange: (m: string) => void;
   modelOptions: Array<{ key: string; sub: string }>;
 }
@@ -296,6 +297,23 @@ function ChatTurn({ msg }: { msg: ChatMessage }) {
       {/* Message content — rendered markdown, not raw */}
       <div style={{ fontSize: 13, lineHeight: 1.7, color: isUser ? V.textBri : V.text,
         fontFamily: "var(--font-sans)" }}>
+        {msg.images && msg.images.length > 0 && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            {msg.images.map((img, idx) => (
+              <img
+                key={idx}
+                src={img}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: 180,
+                  borderRadius: 4,
+                  border: `1px solid ${V.inputBdr}`,
+                  objectFit: "contain",
+                }}
+              />
+            ))}
+          </div>
+        )}
         {isUser ? (
           <p style={{ margin: 0, color: V.textBri, fontSize: 13, lineHeight: 1.7 }}>{msg.content}</p>
         ) : msg.streaming && !msg.content ? (
@@ -528,6 +546,41 @@ function ModelPill({ value, options, onChange }: {
 /* ═══════════════════════════════════════════════════════════════════════════
    MAIN PANEL
 ═══════════════════════════════════════════════════════════════════════════ */
+function compressImage(base64Str: string, maxWidth = 800, maxHeight = 800, quality = 0.7): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+  });
+}
+
 export function AIReasoningPanel({
   projectTitle, steps, messages, summary,
   chatInput, chatBusy, pipelineDone, pipelineActive, pipelinePct,
@@ -535,7 +588,9 @@ export function AIReasoningPanel({
 }: Props) {
   const chatEndRef  = useRef<HTMLDivElement>(null);
   const inputRef    = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [stepsOpen, setStepsOpen] = useState(true);
+  const [attachments, setAttachments] = useState<string[]>([]);
 
   /* Whisper mic recorder — appends transcript to chat input */
   const { isRecording, isTranscribing, toggleRecording } = useMicRecorder(
@@ -551,6 +606,48 @@ export function AIReasoningPanel({
       return () => clearTimeout(t);
     }
   }, [pipelineDone]);
+
+  const processFiles = async (files: FileList) => {
+    const newAttachments: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file.type.startsWith("image/")) continue;
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(file);
+      });
+      const rawBase64 = await base64Promise;
+      const compressed = await compressImage(rawBase64);
+      newAttachments.push(compressed);
+    }
+    if (newAttachments.length > 0) {
+      setAttachments(prev => [...prev, ...newAttachments]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      processFiles(e.target.files);
+      e.target.value = "";
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      e.preventDefault();
+      processFiles(e.clipboardData.files);
+    }
+  };
+
+  const handleSend = () => {
+    if (chatBusy) {
+      onStop();
+    } else {
+      onSend(attachments);
+      setAttachments([]);
+    }
+  };
 
   const completedN = steps.filter(s => s.status === "done").length;
   const pct = pipelinePct || (steps.length ? Math.round(completedN / steps.length * 100) : 0);
@@ -648,6 +745,29 @@ export function AIReasoningPanel({
         }}
           onFocusCapture={e => (e.currentTarget.style.borderColor = V.blue)}
           onBlurCapture={e  => (e.currentTarget.style.borderColor = V.inputBdr)}>
+
+          {/* Attachment Previews */}
+          {attachments.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "8px 10px 4px", borderBottom: `1px solid ${V.sep}` }}>
+              {attachments.map((src, idx) => (
+                <div key={idx} style={{ position: "relative", width: 44, height: 44, borderRadius: 4, overflow: "hidden", border: `1px solid ${V.inputBdr}` }}>
+                  <img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <button
+                    type="button"
+                    onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+                    style={{
+                      position: "absolute", top: 1, right: 1, width: 14, height: 14, borderRadius: "50%",
+                      background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, padding: 0
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <textarea
             ref={inputRef}
             value={chatInput}
@@ -657,8 +777,9 @@ export function AIReasoningPanel({
               e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px";
             }}
             onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatBusy ? onStop() : onSend(); }
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
             }}
+            onPaste={handlePaste}
             placeholder={isRecording ? "Listening… speak now" : isTranscribing ? "Transcribing…" : pipelineDone ? "Ask WireUp AI…" : "AI is generating…"}
             disabled={chatBusy && !pipelineDone}            rows={1}
             style={{
@@ -670,15 +791,28 @@ export function AIReasoningPanel({
             }}
             className="ide-scroll"
           />
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={handleFileChange}
+          />
+
           {/* Toolbar row — model pill + icons + send */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "4px 8px 6px", gap: 6 }}>
             <ModelPill value={model} options={modelOptions} onChange={onModelChange}/>
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
               {/* Attach */}
-              <button style={{ background: "none", border: "none", cursor: "pointer",
-                color: V.textDim, padding: "3px 4px", borderRadius: 3, display: "flex",
-                alignItems: "center", transition: "color 0.1s" }}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{ background: "none", border: "none", cursor: "pointer",
+                  color: V.textDim, padding: "3px 4px", borderRadius: 3, display: "flex",
+                  alignItems: "center", transition: "color 0.1s" }}
                 onMouseOver={e => (e.currentTarget.style.color = V.text)}
                 onMouseOut={e  => (e.currentTarget.style.color = V.textDim)}
                 title="Attach file">
@@ -725,15 +859,15 @@ export function AIReasoningPanel({
               </button>
 
               {/* Send / Stop */}
-              <button onClick={chatBusy ? onStop : onSend}
-                disabled={!chatInput.trim() && !chatBusy}
+              <button onClick={handleSend}
+                disabled={!chatInput.trim() && !attachments.length && !chatBusy}
                 style={{
                   width: 26, height: 26, borderRadius: 4, display: "flex",
                   alignItems: "center", justifyContent: "center",
-                  background: chatBusy ? V.red : chatInput.trim() ? V.blue : "transparent",
-                  color: (chatInput.trim() || chatBusy) ? "#fff" : V.textDim,
-                  border: chatInput.trim() || chatBusy ? "none" : `1px solid ${V.inputBdr}`,
-                  cursor: (chatInput.trim() || chatBusy) ? "pointer" : "not-allowed",
+                  background: chatBusy ? V.red : (chatInput.trim() || attachments.length) ? V.blue : "transparent",
+                  color: (chatInput.trim() || attachments.length || chatBusy) ? "#fff" : V.textDim,
+                  border: (chatInput.trim() || attachments.length || chatBusy) ? "none" : `1px solid ${V.inputBdr}`,
+                  cursor: (chatInput.trim() || attachments.length || chatBusy) ? "pointer" : "not-allowed",
                   transition: "background 0.15s",
                 }}>
                 {chatBusy

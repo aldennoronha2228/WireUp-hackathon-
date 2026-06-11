@@ -149,7 +149,7 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
     projectContext  = "",
     projectId,
   } = req.body as {
-    messages:        Array<{ role: "user" | "assistant"; content: string }>;
+    messages:        Array<{ role: "user" | "assistant"; content: string; images?: string[] }>;
     model?:          string;
     projectContext?: string;
     projectId?:      string;
@@ -185,7 +185,35 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
   const systemContent = buildSystem(projectContext, projectFiles);
   const payload = [
     { role: "system" as const, content: systemContent },
-    ...messages,
+    ...messages.map((m: any) => {
+      if (m.images && m.images.length > 0) {
+        const contentArray: any[] = [
+          { type: "text", text: m.content || "" }
+        ];
+        for (const imgBase64 of m.images) {
+          const match = imgBase64.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+          if (match) {
+            const mimeType = match[1];
+            const base64Data = match[2];
+            contentArray.push({
+              type: "image_url",
+              image_url: {
+                url: `data:${mimeType};base64,${base64Data}`
+              }
+            });
+          } else {
+            contentArray.push({
+              type: "image_url",
+              image_url: {
+                url: imgBase64
+              }
+            });
+          }
+        }
+        return { role: m.role, content: contentArray };
+      }
+      return { role: m.role, content: m.content };
+    }),
   ];
 
   if (editMode) {

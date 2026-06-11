@@ -81,7 +81,7 @@ type TabMode    = "Code" | "Diagram" | "Simulation";
 type BottomTab  = "Output" | "Terminal" | "Logs";
 type StageState = "completed" | "running" | "pending" | "failed";
 interface Stage  { key: string; label: string; state: StageState; }
-interface CMsg   { id: string; role: "user" | "assistant"; content: string; streaming: boolean; }
+interface CMsg   { id: string; role: "user" | "assistant"; content: string; streaming: boolean; images?: string[]; }
 interface LogLine{ type: "info"|"success"|"error"|"warn"; text: string; ts: number; }
 
 /* ─── SSE generator ────────────────────────────────────────────────────────── */
@@ -438,19 +438,19 @@ export default function BuildNewPage() {
     } catch (e: any) { setPipeActive(false); addLog("error", `[wireup] ${e?.message}`); toast.error(e?.message); }
   };
 
-  const sendChat = async () => {
+  const sendChat = async (attachments: string[] = []) => {
     const text = chatIn.trim();
-    if (!text || chatBusy) return;
+    if ((!text && !attachments.length) || chatBusy) return;
 
     // Append user message
-    const userMsg = { id: `u-${Date.now()}`, role: "user" as const, content: text, streaming: false };
+    const userMsg = { id: `u-${Date.now()}`, role: "user" as const, content: text, streaming: false, images: attachments };
     setMsgs(p => [...p, userMsg]);
     setChatIn(""); setChatBusy(true);
 
     // Build conversation history (all non-streaming messages)
     const history = [...msgs, userMsg]
       .filter(m => !m.streaming)
-      .map(m => ({ role: m.role as "user" | "assistant", content: m.content }));
+      .map(m => ({ role: m.role as "user" | "assistant", content: m.content, images: m.images }));
 
     // Placeholder for streaming AI response
     const aid = `a-${Date.now()}`;
@@ -1194,6 +1194,7 @@ export default function BuildNewPage() {
                 role:     m.role as "user" | "assistant",
                 content:  m.content,
                 streaming:m.streaming,
+                images:   m.images,
               }))}
             summary={pipelineDone
               ? (msgs.find(m => m.id === "summary")?.content?.trim() ?? "")

@@ -13,6 +13,7 @@ export interface IProject extends Document {
     id?: string;
     role: "user" | "assistant";
     content: string;
+    images?: string[];
   }>;
   createdAt: Date;
   updatedAt: Date;
@@ -34,7 +35,8 @@ const projectSchema = new Schema<IProject>(
       {
         id: { type: String },
         role: { type: String, required: true },
-        content: { type: String, default: "" }
+        content: { type: String, default: "" },
+        images: { type: [String], default: [] }
       }
     ]
   },
