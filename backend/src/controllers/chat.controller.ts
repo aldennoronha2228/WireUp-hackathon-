@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { IUser } from "../models/user.model";
-import { streamTokenLB, callLLM, MODEL_MAP, DEFAULT_MODEL } from "../lib/llm";
+import { streamTokenLB, callLLM, MODEL_MAP, DEFAULT_MODEL, resolveModelId } from "../lib/llm";
 import Project from "../models/project.model";
 
 interface AuthRequest extends Request { user?: IUser; }
@@ -32,7 +32,8 @@ function isEditRequest(msg: string): boolean {
     "change", "replace", "swap", "update", "modify", "edit", "add", "remove", 
     "delete", "fix", "rewrite", "wire", "connect", "disconnect", "use", "switch", 
     "instead", "implement", "create", "write", "configure", "setup", "put", "attach",
-    "insert", "make changes"
+    "insert", "make changes", "make", "generate", "draw", "show", "build", "wireup", 
+    "design", "create", "adjust", "rearrange", "place", "re-arrange"
   ];
   
   const targetKeywords = [
@@ -125,7 +126,11 @@ function parseFileEdits(text: string): FileEdit[] {
   let m: RegExpExecArray | null;
   while ((m = regex.exec(text)) !== null) {
     const filename = m[1].trim();
-    const content  = m[2].trim();
+    let content  = m[2].trim();
+    // Strip markdown code fences the AI sometimes wraps around JSON content
+    if (content.startsWith("```")) {
+      content = content.replace(/^```[a-zA-Z]*\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
+    }
     if (filename && content) edits.push({ filename, content });
   }
   return edits;
@@ -168,15 +173,7 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
   const lastMsg  = messages[messages.length - 1].content;
   const editMode = isEditRequest(lastMsg);
 
-  let resolvedModelKey = modelKey;
-  if (modelKey === "Auto") {
-    // Automatically select a random cheap model (WU Lite, GPT-4o Mini, Gemini Flash)
-    // to reduce token costs and distribute API usage.
-    const cheapModels = ["WU Lite", "GPT-4o Mini", "Gemini Flash"];
-    resolvedModelKey = cheapModels[Math.floor(Math.random() * cheapModels.length)];
-  }
-
-  const modelId  = MODEL_MAP[resolvedModelKey] ?? MODEL_MAP[DEFAULT_MODEL];
+  const modelId = resolveModelId(modelKey);
 
   res.setHeader("Content-Type",      "text/event-stream");
   res.setHeader("Cache-Control",     "no-cache");
@@ -189,7 +186,7 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
     key: modelKey, 
     id: modelId,
     label: modelKey === "Auto" 
-      ? `Auto (${resolvedModelKey} selected)` 
+      ? `Auto (${modelId})` 
       : (CHAT_MODEL_INFO.find(m => m.key === modelKey)?.sub ?? modelKey)
   });
 
@@ -238,10 +235,10 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
 
   if (editMode) {
     // For edit requests — use non-streaming to capture full response + parse edits
-    send("thinking", { message: modelKey === "Auto" ? `Analysing and applying changes (using ${resolvedModelKey})…` : "Analysing and applying changes…" });
+    send("thinking", { message: modelKey === "Auto" ? `Analysing and applying changes (using ${modelId})…` : "Analysing and applying changes…" });
 
     try {
-      const fullResponse = await callLLM(payload, resolvedModelKey, 2000);
+      const fullResponse = await callLLM(payload, modelKey, 2000);
       const edits        = parseFileEdits(fullResponse);
       const visibleText  = stripFileEdits(fullResponse);
 
@@ -311,14 +308,45 @@ export const chatStream = async (req: AuthRequest, res: Response) => {
     payload, modelId,
     (token, full) => send("token", { token, full }),
     async (full, fallback) => {
-      send("done", { content: full, ...(fallback ? { fallback } : {}) });
+      const edits = parseFileEdits(full);
+      const visibleText = stripFileEdits(full);
+
+      // Apply file edits to DB if any are returned
+      if (edits.length > 0 && projectId && req.user?._id) {
+        try {
+          const proj = await Project.findOne({ _id: projectId, owner: req.user._id });
+          if (proj) {
+            for (const edit of edits) {
+              const idx = proj.files.findIndex(f => f.name === edit.filename);
+              const lang = edit.filename.endsWith(".ino") ? "Arduino"
+                : edit.filename.endsWith(".md")  ? "Markdown"
+                : edit.filename.endsWith(".csv") ? "CSV"
+                : edit.filename.endsWith(".json")? "JSON" : "Plain Text";
+
+              if (idx >= 0) {
+                proj.files[idx] = { name: edit.filename, language: lang, content: edit.content };
+              } else {
+                proj.files.push({ name: edit.filename, language: lang, content: edit.content });
+              }
+            }
+            await proj.save();
+          }
+        } catch (e) {
+          console.error("[chat] Failed to save streaming file edits:", e);
+        }
+        // Send edits to frontend so it updates live
+        send("file_edits", { edits });
+      }
+
+      send("done", { content: visibleText, editsApplied: edits.length, ...(fallback ? { fallback } : {}) });
+
       if (projectId && req.user?._id) {
         try {
           await Project.findOneAndUpdate(
             { _id: projectId, owner: req.user._id },
             { chatHistory: [
                 ...messages,
-                { role: "assistant" as const, content: full }
+                { role: "assistant" as const, content: visibleText }
               ]
             }
           );

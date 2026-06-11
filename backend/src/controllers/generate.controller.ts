@@ -328,11 +328,19 @@ Reply with ONLY the project name, nothing else.`
             .map(([k, v]) => `[${k}]\n${v}`)
             .join("\n\n");
 
-          const fileContent = await callLLM(
+          let fileContent = await callLLM(
             [{ role: "user", content: fp.prompt(idea.trim(), contextStr) }],
             modelKey,
             fp.filename.endsWith(".ino") ? 1200 : 800,
           );
+
+          // Strip markdown code fences the AI may wrap around content
+          if (fileContent.trimStart().startsWith("```")) {
+            fileContent = fileContent.trim()
+              .replace(/^```[a-zA-Z]*\s*\n?/, "")
+              .replace(/\n?```\s*$/, "")
+              .trim();
+          }
 
           // Save to DB if we have a project ID
           if (projectId && req.user?._id) {

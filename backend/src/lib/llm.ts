@@ -10,6 +10,25 @@
 
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
+/* ── Provider Blacklisting (Circuit Breaker) ────────────────────────────── */
+const PROVIDER_BLACKLIST = new Map<string, number>();
+
+function isBlacklisted(providerName: string, modelId: string): boolean {
+  const key = `${providerName}:${modelId}`;
+  const expiry = PROVIDER_BLACKLIST.get(key);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    PROVIDER_BLACKLIST.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function blacklistProvider(providerName: string, modelId: string, durationMs = 120000) {
+  const key = `${providerName}:${modelId}`;
+  PROVIDER_BLACKLIST.set(key, Date.now() + durationMs);
+}
+
 /* ── Model map ───────────────────────────────────────────────────────────── */
 export const MODEL_MAP: Record<string, string> = {
   "WU Lite":       "claude-haiku-4-5-20251001",
@@ -25,8 +44,24 @@ export const MODEL_MAP: Record<string, string> = {
   "Claude Opus":   "claude-opus-4-8",
   "Claude Haiku":  "claude-haiku-4-5-20251001",
   "Gemini Flash":  "gemini-3-flash-preview",
-  "Auto":          "claude-sonnet-4-6",
+  // "Auto" is handled dynamically — see resolveAutoModel()
 };
+
+/* ── Auto mode: rotate randomly through cheap/fast models ────────────── */
+const AUTO_POOL = [
+  "llama-3.3-70b-versatile",    // Groq - fast & working
+  "gpt-3.5-turbo-0613",         // Bluesminds - cheap & working
+  "vllm-current",               // Bluesminds reasoning - working
+];
+function resolveAutoModel(): string {
+  return AUTO_POOL[Math.floor(Math.random() * AUTO_POOL.length)];
+}
+/** Resolve a model key to an actual model ID, handling "Auto" rotation */
+export function resolveModelId(modelKey: string): string {
+  if (modelKey === "Auto" || modelKey === "auto") return resolveAutoModel();
+  return MODEL_MAP[modelKey] ?? DEFAULT_MODEL_ID;
+}
+
 export const DEFAULT_MODEL    = "WU Pro";
 export const DEFAULT_MODEL_ID = MODEL_MAP[DEFAULT_MODEL];
 
@@ -77,18 +112,28 @@ async function _openAICompatible(
 ): Promise<string> {
   if (!key) throw new Error(`${providerName} API key is not set`);
 
-  const res = await fetch(`${base}/chat/completions`, {
-    method:  "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: modelId, messages, max_tokens: maxTokens, temperature: 0.7 }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for non-streaming
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`${providerName} ${res.status}: ${txt.slice(0, 200)}`);
+  try {
+    const res = await fetch(`${base}/chat/completions`, {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelId, messages, max_tokens: maxTokens, temperature: 0.7 }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`${providerName} ${res.status}: ${txt.slice(0, 200)}`);
+    }
+    const json = await res.json() as any;
+    return String(json?.choices?.[0]?.message?.content ?? "").trim();
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    throw err;
   }
-  const json = await res.json() as any;
-  return String(json?.choices?.[0]?.message?.content ?? "").trim();
 }
 
 async function _tokenLB(
@@ -110,20 +155,32 @@ async function _bluesminds(
 /* ── Internal: Groq non-streaming (key rotation) ────────────────────────── */
 async function _groq(
   messages: Array<{ role: string; content: any }>,
+  modelId = GROQ_MODEL,
   attempt = 0,
 ): Promise<string> {
   const keys = groqKeys();
   if (attempt >= keys.length) throw new Error("All Groq keys exhausted");
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method:  "POST",
-    headers: { Authorization: `Bearer ${keys[attempt]}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: GROQ_MODEL, messages, max_tokens: 600, temperature: 0.7 }),
-  });
-  if (res.status === 429 || res.status === 503) return _groq(messages, attempt + 1);
-  if (!res.ok) { const txt = await res.text(); throw new Error(`Groq ${res.status}: ${txt.slice(0, 200)}`); }
-  const json = await res.json() as any;
-  return String(json?.choices?.[0]?.message?.content ?? "").trim();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${keys[attempt]}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelId, messages, max_tokens: 600, temperature: 0.7 }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.status === 429 || res.status === 503) return _groq(messages, modelId, attempt + 1);
+    if (!res.ok) { const txt = await res.text(); throw new Error(`Groq ${res.status}: ${txt.slice(0, 200)}`); }
+    const json = await res.json() as any;
+    return String(json?.choices?.[0]?.message?.content ?? "").trim();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
 }
 
 /* ── Public: resilient non-streaming ────────────────────────────────────── */
@@ -132,10 +189,17 @@ export async function callLLM(
   modelKey   = DEFAULT_MODEL,
   maxTokens  = 600,
 ): Promise<string> {
-  const modelId = MODEL_MAP[modelKey] ?? DEFAULT_MODEL_ID;
+  const modelId = resolveModelId(modelKey);
   const isClaude = modelId.startsWith("claude-");
+  const isGroq = modelId === GROQ_MODEL || modelId.startsWith("llama-");
 
-  const providers = isClaude 
+  const providers = isGroq
+    ? [
+        { name: "Groq", call: () => _groq(messages, modelId) },
+        { name: "Bluesminds", call: () => _bluesminds(messages, modelId, maxTokens) },
+        { name: "TokenLB", call: () => _tokenLB(messages, modelId, maxTokens) }
+      ]
+    : isClaude 
     ? [
         { name: "TokenLB", call: () => _tokenLB(messages, modelId, maxTokens) },
         { name: "Bluesminds", call: () => _bluesminds(messages, modelId, maxTokens) }
@@ -149,34 +213,54 @@ export async function callLLM(
     try {
       if (provider.name === "TokenLB" && !tokenLBKey()) continue;
       if (provider.name === "Bluesminds" && !bluesmindsKey()) continue;
+      if (provider.name === "Groq" && groqKeys().length === 0) continue;
+
+      if (isBlacklisted(provider.name, modelId)) {
+        console.warn(`[llm] Skipping blacklisted provider: ${provider.name} for model ${modelId}`);
+        continue;
+      }
+
       return await provider.call();
     } catch (err: any) {
       console.warn(`[llm] ${provider.name}(${modelId}) failed: ${String(err?.message).slice(0, 80)}`);
+      blacklistProvider(provider.name, modelId, 120000); // Blacklist for 2 minutes
     }
   }
 
-  // 3. Groq if keys exist
-  const gKeys = groqKeys();
-  if (gKeys.length > 0) {
-    try {
-      console.warn("[llm] Falling back to Groq…");
-      return await _groq(messages);
-    } catch (e3: any) {
-      console.warn(`[llm] Groq failed: ${String(e3?.message).slice(0, 80)}`);
-    }
-  }
-
-    // 4. TokenLB with WU Lite as last resort
-    const liteId = MODEL_MAP["WU Lite"];
-    if (liteId !== modelId) {
+  // 3. Groq if keys exist and wasn't tried first
+  if (!isGroq) {
+    const gKeys = groqKeys();
+    if (gKeys.length > 0) {
       try {
-        console.warn(`[llm] Retrying TokenLB with ${liteId}…`);
-        return await _tokenLB(messages, liteId, maxTokens);
-      } catch (e4: any) {
-        throw new Error(`All LLM providers failed. Last: ${String(e4?.message).slice(0, 120)}`);
+        console.warn("[llm] Falling back to Groq…");
+        return await _groq(messages, GROQ_MODEL);
+      } catch (e3: any) {
+        console.warn(`[llm] Groq failed: ${String(e3?.message).slice(0, 80)}`);
       }
     }
-    throw new Error(`LLM call failed for model ${modelId}.`);
+  }
+
+  // 4. Bluesminds with gpt-3.5-turbo-0613 fallback
+  if (bluesmindsKey() && modelId !== "gpt-3.5-turbo-0613") {
+    try {
+      console.warn("[llm] Falling back to Bluesminds (gpt-3.5-turbo-0613)…");
+      return await _bluesminds(messages, "gpt-3.5-turbo-0613", maxTokens);
+    } catch (e4: any) {
+      console.warn(`[llm] Bluesminds fallback failed: ${String(e4?.message).slice(0, 80)}`);
+    }
+  }
+
+  // 5. TokenLB with WU Lite as last resort
+  const liteId = MODEL_MAP["WU Lite"];
+  if (liteId !== modelId) {
+    try {
+      console.warn(`[llm] Retrying TokenLB with ${liteId}…`);
+      return await _tokenLB(messages, liteId, maxTokens);
+    } catch (e5: any) {
+      throw new Error(`All LLM providers failed. Last: ${String(e5?.message).slice(0, 120)}`);
+    }
+  }
+  throw new Error(`LLM call failed for model ${modelId}.`);
 }
 
 /* ── Public: streaming via TokenLB (with fallbacks) ─────────────────────── */
@@ -192,59 +276,78 @@ export async function streamTokenLB(
 
   /* ── inner: stream one model ─────────────────────────────────────────── */
   const tryStream = async (mId: string, key: string, base: string, providerName: string): Promise<void> => {
-    const res = await fetch(`${base}/chat/completions`, {
-      method:  "POST",
-      headers: {
-        Authorization:  `Bearer ${key}`,
-        "Content-Type": "application/json",
-        Accept:         "text/event-stream",
-      },
-      body: JSON.stringify({
-        model:       mId,
-        messages,
-        max_tokens:  maxTokens,
-        temperature: 0.7,
-        stream:      true,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s connection timeout
 
-    if (!res.ok || !res.body) {
-      const txt = await res.text();
-      throw new Error(`${providerName} ${res.status}: ${txt.slice(0, 200)}`);
-    }
+    try {
+      const res = await fetch(`${base}/chat/completions`, {
+        method:  "POST",
+        headers: {
+          Authorization:  `Bearer ${key}`,
+          "Content-Type": "application/json",
+          Accept:         "text/event-stream",
+        },
+        body: JSON.stringify({
+          model:       mId,
+          messages,
+          max_tokens:  maxTokens,
+          temperature: 0.7,
+          stream:      true,
+        }),
+        signal: controller.signal,
+      });
 
-    const reader  = res.body.getReader();
-    const decoder = new TextDecoder();
-    let   buf     = "";
-    let   full    = "";
-    let   done    = false;
+      clearTimeout(timeoutId);
 
-    while (!done) {
-      const { done: end, value } = await reader.read();
-      if (end) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const raw = line.slice(6).trim();
-        if (raw === "[DONE]") { done = true; break; }
-        try {
-          const chunk  = JSON.parse(raw);
-          const token  = String(chunk?.choices?.[0]?.delta?.content ?? "");
-          if (token) { full += token; onToken(token, full); }
-          const finish = chunk?.choices?.[0]?.finish_reason;
-          if (finish && finish !== "null" && finish !== null) done = true;
-        } catch { /* skip malformed */ }
+      if (!res.ok || !res.body) {
+        const txt = await res.text();
+        throw new Error(`${providerName} ${res.status}: ${txt.slice(0, 200)}`);
       }
-    }
 
-    if (full) onDone(full, usedFallback);
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let   buf     = "";
+      let   full    = "";
+      let   done    = false;
+
+      while (!done) {
+        const { done: end, value } = await reader.read();
+        if (end) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (raw === "[DONE]") { done = true; break; }
+          try {
+            const chunk  = JSON.parse(raw);
+            const token  = String(chunk?.choices?.[0]?.delta?.content ?? "");
+            if (token) { full += token; onToken(token, full); }
+            const finish = chunk?.choices?.[0]?.finish_reason;
+            if (finish && finish !== "null" && finish !== null) done = true;
+          } catch { /* skip malformed */ }
+        }
+      }
+
+      if (full) onDone(full, usedFallback);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
   };
 
   const isClaude = modelId.startsWith("claude-");
-  const providers = isClaude 
+  const isGroq = modelId === GROQ_MODEL || modelId.startsWith("llama-");
+
+  const providers = isGroq
+    ? [
+        { name: "Groq", key: groqKeys()[0] ?? "", base: "https://api.groq.com/openai/v1" },
+        { name: "Bluesminds", key: bluesmindsKey(), base: bluesmindsBase() },
+        { name: "TokenLB", key: tokenLBKey(), base: tokenLBBase() }
+      ]
+    : isClaude 
     ? [
         { name: "TokenLB", key: tokenLBKey(), base: tokenLBBase() },
         { name: "Bluesminds", key: bluesmindsKey(), base: bluesmindsBase() }
@@ -260,30 +363,51 @@ export async function streamTokenLB(
       if (provider.name === "Bluesminds" && provider.key) {
         usedFallback = "bluesminds";
       }
+
+      if (isBlacklisted(provider.name, modelId)) {
+        console.warn(`[llm] Skipping blacklisted provider: ${provider.name} for model ${modelId}`);
+        continue;
+      }
+
       await tryStream(modelId, provider.key, provider.base, provider.name);
       return;
     } catch (err: any) {
       console.warn(`[llm] Stream ${provider.name}(${modelId}) failed: ${String(err?.message).slice(0, 80)}`);
+      blacklistProvider(provider.name, modelId, 120000); // Blacklist for 2 minutes
     }
   }
 
-  // Fallback to Groq
-  const gKeys = groqKeys();
-  if (gKeys.length > 0) {
-    try {
-      console.warn("[llm] Stream → Groq fallback…");
-      const content = await _groq(messages);
-      let full = "";
-      for (const word of content.split(" ")) {
-        const tok = (full ? " " : "") + word;
-        full += tok;
-        onToken(tok, full);
-        await new Promise(r => setTimeout(r, 12));
+  // Fallback to Groq if not tried first
+  if (!isGroq) {
+    const gKeys = groqKeys();
+    if (gKeys.length > 0) {
+      try {
+        console.warn("[llm] Stream → Groq fallback…");
+        const content = await _groq(messages, GROQ_MODEL);
+        let full = "";
+        const words = content.split(" ");
+        for (let i = 0; i < words.length; i++) {
+          const tok = (i > 0 ? " " : "") + words[i];
+          full += tok;
+          onToken(tok, full);
+          await new Promise(r => setTimeout(r, 12));
+        }
+        onDone(full, "groq");
+        return;
+      } catch (e3: any) {
+        console.warn(`[llm] Groq stream fallback failed: ${String(e3?.message).slice(0, 80)}`);
       }
-      onDone(full, "groq");
+    }
+  }
+
+  // Fallback to Bluesminds with a known working model
+  if (bluesmindsKey() && modelId !== "gpt-3.5-turbo-0613") {
+    try {
+      console.warn("[llm] Stream → Bluesminds fallback (gpt-3.5-turbo-0613)…");
+      await tryStream("gpt-3.5-turbo-0613", bluesmindsKey(), bluesmindsBase(), "Bluesminds");
       return;
-    } catch (e3: any) {
-      console.warn(`[llm] Groq stream fallback failed: ${String(e3?.message).slice(0, 80)}`);
+    } catch (e4: any) {
+      console.warn(`[llm] Bluesminds fallback failed: ${String(e4?.message).slice(0, 80)}`);
     }
   }
 

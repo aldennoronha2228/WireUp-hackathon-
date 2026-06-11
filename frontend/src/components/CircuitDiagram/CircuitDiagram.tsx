@@ -361,7 +361,16 @@ function build(desc: string): { nodes: Node[]; edges: Edge[] } {
 /* ── Build from diagram.json ────────────────────────────────────────── */
 function buildFromJSON(jsonStr: string, projectDesc: string): { nodes: Node[]; edges: Edge[] } {
   try {
-    const data = typeof jsonStr === "string" ? JSON.parse(jsonStr) : jsonStr;
+    // Strip markdown code fences if the AI wrapped JSON in ```json ... ``` or ``` ... ```
+    let cleaned = jsonStr.trim();
+    if (cleaned.startsWith("```")) {
+      // Remove opening fence (```json or ```)
+      cleaned = cleaned.replace(/^```[a-zA-Z]*\s*\n?/, "");
+      // Remove closing fence
+      cleaned = cleaned.replace(/\n?```\s*$/, "");
+      cleaned = cleaned.trim();
+    }
+    const data = typeof cleaned === "string" ? JSON.parse(cleaned) : cleaned;
     if (!data || !data.components || !Array.isArray(data.components)) {
       throw new Error("Invalid diagram JSON: missing components array");
     }

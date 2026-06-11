@@ -1,4 +1,4 @@
-﻿//this file is inspected and needs to be re inspected once complete traversal is done
+//this file is inspected and needs to be re inspected once complete traversal is done
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -506,8 +506,10 @@ export default function HomePage() {
       const res = await axiosInstance.post<{ _id: string }>("/projects", {
         description: inputValue.trim(),
       });
+      const promptText = inputValue.trim();
+      setInputValue("");
       navigate(`/project/${res.data._id}`, {
-        state: { prompt: inputValue.trim() },
+        state: { prompt: promptText },
       });
     } catch (e: any) {
       toast.error(e?.response?.data?.message || "Failed to create project");
@@ -1111,7 +1113,10 @@ export default function HomePage() {
               // Go straight to workspace — no modal
               setIsCreating(true);
               axiosInstance.post<{ _id: string }>("/projects", { description: idea })
-                .then(res => navigate(`/project/${res.data._id}`, { state: { prompt: idea } }))
+                .then(res => {
+                  setInputValue("");
+                  navigate(`/project/${res.data._id}`, { state: { prompt: idea } });
+                })
                 .catch(() => toast.error("Failed to create project"))
                 .finally(() => setIsCreating(false));
             }
