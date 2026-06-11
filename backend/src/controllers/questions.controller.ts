@@ -23,34 +23,39 @@ export const generateQuestions = async (req: AuthRequest, res: Response) => {
     const raw = await callLLM(
       [{
         role: "user",
-        content: `You are a hardware engineering assistant helping design a project.
-The user wants to build: "${idea.trim()}"
+        content: `You are a hardware engineering assistant. A user wants to build:
+"${idea.trim()}"
 
-Generate exactly 6 clarifying questions to better understand their requirements.
-The FIRST question MUST be specifically about this project — ask something directly relevant to "${idea.trim()}" (e.g. if it's a temperature sensor project, ask about the measurement range or display; if it's a robot, ask about movement type; if it's IoT, ask about connectivity needs).
+Your job: Generate 6 questions that ONLY make sense for THIS specific project. Every question must be directly about what they are building — not generic hardware questions.
 
-The remaining questions must cover:
-2. What microcontroller/platform they prefer (Arduino, ESP32, Raspberry Pi, etc.)
-3. What hardware/parts they already have
-4. Power source (USB, battery, solar, etc.)
-5. Display/output method
-6. Skill level
+RULES:
+- Question 1: About the primary function/goal of this specific project
+- Question 2: About the specific sensors/components this project needs
+- Question 3: About the environment or use case (where/how will it be used)
+- Question 4: About accuracy/precision/performance requirements
+- Question 5: About how results/data should be presented
+- Question 6: About any special constraints (size, cost, etc.)
 
-For each question provide 4-5 answer options relevant to this specific project. Always include "Not sure — suggest one" for technical choices.
+For each question, provide 4-5 answer options that are SPECIFIC to this project.
+Always include one option like "Not sure — let AI decide" for technical choices.
 
-Return ONLY a valid JSON array, no markdown:
+Example for a "temperature monitor project":
+- Q1: "What temperature range does your sensor need to cover?" with options [-40°C to 80°C (indoor), -20°C to 50°C (home), 0°C to 300°C (industrial), Not sure]
+- Q2: "How often should temperature be measured?" with options [Every second, Every 5 seconds, Every minute, Only when button pressed]
+- NOT: "Which microcontroller do you prefer?" — that is TOO GENERIC
+
+Return ONLY a valid JSON array, no markdown, no explanation:
 [
   {
-    "id": "project_goal",
-    "text": "Specific question directly about THIS project",
-    "hint": "relevant helper text",
-    "options": ["option1", "option2", "option3", "option4", "Not sure — suggest one"]
-  },
-  ...
+    "id": "q1",
+    "text": "Question text here?",
+    "hint": "Brief helper text",
+    "options": ["Option A", "Option B", "Option C", "Option D", "Not sure — let AI decide"]
+  }
 ]`,
       }],
       model,
-      900,
+      1000,
     );
 
     // Parse and validate
@@ -75,76 +80,104 @@ Return ONLY a valid JSON array, no markdown:
   }
 };
 
-/* ── Default questions if LLM fails — first question is project-specific ── */
+/* ── Smart fallback — project-specific questions based on keywords ─────── */
 function defaultQuestions(idea: string): Question[] {
-  // Derive a project-specific first question from the idea
-  const lower = idea.toLowerCase();
-  let firstQ: Question;
+  const l = idea.toLowerCase();
 
-  if (lower.includes("temperature") || lower.includes("sensor") || lower.includes("dht")) {
-    firstQ = {
-      id: "project_goal",
-      text: "What should happen when the temperature exceeds a threshold?",
-      hint: "This shapes the core logic of your build",
-      options: ["Sound a buzzer alarm", "Send a notification (WiFi)", "Turn on a fan/relay", "Just display the reading", "Not sure — suggest one"],
-    };
-  } else if (lower.includes("robot") || lower.includes("motor") || lower.includes("servo")) {
-    firstQ = {
-      id: "project_goal",
-      text: "How should your robot move?",
-      hint: "Determines motors and control logic",
-      options: ["Wheels (DC motors)", "Legs (servo motors)", "Arm/gripper (servo)", "Remote controlled", "Autonomous/sensor-guided"],
-    };
-  } else if (lower.includes("iot") || lower.includes("wifi") || lower.includes("cloud")) {
-    firstQ = {
-      id: "project_goal",
-      text: "Where should the data be sent or accessed?",
-      hint: "Shapes the communication architecture",
-      options: ["Local web dashboard (browser)", "Mobile app (Bluetooth)", "Cloud service (MQTT/HTTP)", "Just serial monitor", "Not sure — suggest one"],
-    };
-  } else if (lower.includes("display") || lower.includes("oled") || lower.includes("lcd")) {
-    firstQ = {
-      id: "project_goal",
-      text: "What should be shown on the display?",
-      options: ["Sensor readings (live data)", "Clock / date / time", "Custom menu / UI", "Status indicators", "Not sure — suggest one"],
-    };
-  } else {
-    firstQ = {
-      id: "project_goal",
-      text: `What is the main goal of your "${idea.slice(0, 40)}" project?`,
-      hint: "Helps the AI understand your core use case",
-      options: ["Monitor and display data", "Control something (motor/relay)", "Alert when threshold reached", "Log data over time", "Not sure — suggest one"],
-    };
-  }
+  // ── Temperature / environment sensing ──────────────────────────────────
+  if (l.match(/temp|humidity|dht|bmp|weather|climate|thermos/)) return [
+    { id:"q1", text:"What temperature range do you need to measure?",
+      options:["Indoor room (15-35°C)","Outdoor (-20 to 50°C)","Industrial (0-300°C)","Body temperature (35-42°C)","Not sure — let AI decide"] },
+    { id:"q2", text:"How should temperature alerts be triggered?",
+      options:["Buzzer when threshold crossed","LED indicator","Send phone notification","Log to SD card","No alerts needed"] },
+    { id:"q3", text:"How often should readings be taken?",
+      options:["Every second (real-time)","Every 5 seconds","Every minute","Only on button press","Not sure — let AI decide"] },
+    { id:"q4", text:"Where will this device be placed?",
+      options:["Fixed on a wall/desk","Portable (battery powered)","Outside (weatherproof)","Inside a machine","Not sure yet"] },
+    { id:"q5", text:"How should readings be displayed?",
+      options:["OLED/LCD screen","Web dashboard","Serial monitor only","LED colour indicator","Mobile app"] },
+    { id:"q6", text:"Does it need to store historical data?",
+      options:["Yes — log to SD card","Yes — send to cloud","Yes — store in EEPROM","No — live readings only","Not sure"] },
+  ];
 
+  // ── Robot / motor / servo ───────────────────────────────────────────────
+  if (l.match(/robot|motor|servo|arm|wheeled|autonomous/)) return [
+    { id:"q1", text:"How should the robot move?",
+      options:["2 wheels (differential drive)","4 wheels (car style)","Legs (servo joints)","Tracks (tank style)","Stationary arm only"] },
+    { id:"q2", text:"How will the robot be controlled?",
+      options:["Bluetooth from phone","WiFi web interface","IR remote control","Autonomous (sensors only)","Joystick / buttons"] },
+    { id:"q3", text:"What should the robot avoid or detect?",
+      options:["Obstacles (ultrasonic)","Lines on floor (line follower)","Walls (IR sensors)","Nothing — simple movement","Not sure"] },
+    { id:"q4", text:"What speed/load does it need to handle?",
+      options:["Light — small toy","Medium — carry small objects","Heavy — industrial arm","Variable speed control","Not sure"] },
+    { id:"q5", text:"How long should it run on one charge?",
+      options:["Under 30 minutes","1-2 hours","4+ hours","Continuous (plugged in)","Not sure yet"] },
+    { id:"q6", text:"Does the robot need a camera or vision?",
+      options:["Yes — camera feed to phone","Yes — OpenCV object detection","Yes — simple IR/colour sensing","No vision needed","Not sure"] },
+  ];
+
+  // ── Smart home / automation ─────────────────────────────────────────────
+  if (l.match(/smart|home|automati|relay|switch|light|control/)) return [
+    { id:"q1", text:"What do you want to control or automate?",
+      options:["Lights (on/off/dim)","Fan / air conditioner","Locks / security","Irrigation / water","Custom appliance"] },
+    { id:"q2", text:"How will automation be triggered?",
+      options:["Time schedule","Voice command","Sensor threshold","Mobile app button","Physical button"] },
+    { id:"q3", text:"How many devices need to be controlled?",
+      options:["1 single device","2-4 devices","5-10 devices","More than 10","Not sure yet"] },
+    { id:"q4", text:"How will devices be connected?",
+      options:["WiFi (ESP32/NodeMCU)","Bluetooth (short range)","Zigbee/Z-Wave","433MHz RF","Wired only"] },
+    { id:"q5", text:"Do you need remote access from outside home?",
+      options:["Yes — from anywhere via internet","Yes — local network only","No — just in the room","Not sure"] },
+    { id:"q6", text:"What should happen during a power outage?",
+      options:["Return to last state","Default to OFF/safe state","Battery backup","Send alert notification","Not important"] },
+  ];
+
+  // ── IoT / data logging / cloud ──────────────────────────────────────────
+  if (l.match(/iot|data log|cloud|mqtt|dashboard|monitor/)) return [
+    { id:"q1", text:"What data needs to be collected?",
+      options:["Single sensor (one reading)","Multiple sensors","GPS location data","Images / video","Custom binary data"] },
+    { id:"q2", text:"Where should data be sent?",
+      options:["Local web server (browser)","Cloud (AWS/Azure/Firebase)","MQTT broker","Database (MySQL/InfluxDB)","SD card only"] },
+    { id:"q3", text:"How often should data be uploaded?",
+      options:["Real-time (every second)","Every minute","Every hour","On event/trigger only","Not sure"] },
+    { id:"q4", text:"How many nodes/devices will send data?",
+      options:["Just 1 device","2-5 devices","6-20 devices","50+ devices (mesh)","Not sure yet"] },
+    { id:"q5", text:"Should the device work offline too?",
+      options:["Yes — store locally when offline","Yes — full offline mode","No — always online","Not sure"] },
+    { id:"q6", text:"Does it need to send alerts?",
+      options:["Email alerts","Push notifications","SMS","Telegram/WhatsApp bot","No alerts needed"] },
+  ];
+
+  // ── Display / screen project ────────────────────────────────────────────
+  if (l.match(/display|screen|oled|lcd|tft|clock|weather station/)) return [
+    { id:"q1", text:"What should be shown on the display?",
+      options:["Real-time sensor data","Clock and date","Weather information","Custom menu/UI","Scrolling text/announcements"] },
+    { id:"q2", text:"What display size do you prefer?",
+      options:["Tiny OLED 0.96\" (128x64)","Small LCD 16x2 characters","Medium TFT 2.4\" colour","Large 3.5\"+ touchscreen","Not sure — suggest one"] },
+    { id:"q3", text:"How often should the display update?",
+      options:["Every second","Every 5 seconds","Every minute","Only on new data","On button press"] },
+    { id:"q4", text:"Should the display have interactive buttons?",
+      options:["Yes — physical buttons to navigate","Yes — touchscreen","No — display only","Rotary encoder / knob","Not sure"] },
+    { id:"q5", text:"Will it run continuously or sleep to save power?",
+      options:["Always on","Sleep + wake on motion/button","Scheduled on/off","Low-power always-on","Battery powered — maximize life"] },
+    { id:"q6", text:"Any specific visual style needed?",
+      options:["Minimal — data only","Charts / graphs","Custom icons","Dark mode (OLED)","No preference"] },
+  ];
+
+  // ── Generic fallback ────────────────────────────────────────────────────
   return [
-    firstQ,
-    {
-      id: "mcu",
-      text: "Which microcontroller do you prefer?",
-      hint: "Affects code style and capabilities",
-      options: ["Arduino (C++, beginner-friendly)", "ESP32 (WiFi/BT built-in)", "STM32 (advanced)", "Raspberry Pi (Python)", "Not sure — suggest one"],
-    },
-    {
-      id: "hardware",
-      text: "What hardware do you already have?",
-      hint: "We'll design around what you own",
-      options: ["Arduino Uno", "ESP32 DevKit V1", "Raspberry Pi", "Nothing yet — suggest parts", "Other parts (I'll specify)"],
-    },
-    {
-      id: "power",
-      text: "What power source is preferred?",
-      options: ["USB wall adapter (fixed)", "Battery powered (portable)", "Solar powered (outdoor)", "PoE (Ethernet)", "Not sure"],
-    },
-    {
-      id: "display",
-      text: "How should data be displayed or accessed?",
-      options: ["OLED/LCD display", "Serial monitor (PC only)", "Web dashboard", "LED indicators only", "No display needed"],
-    },
-    {
-      id: "skill",
-      text: "What is your experience level with electronics?",
-      options: ["Complete beginner", "I've built a few projects", "Intermediate — comfortable with circuits", "Advanced engineer"],
-    },
+    { id:"q1", text:`What is the primary goal of your project?`,
+      hint:"Describe the core functionality",
+      options:["Measure and display data","Control something (motor/relay/LED)","Send alerts when something happens","Log data over time","Not sure — let AI decide"] },
+    { id:"q2", text:"What is the most important performance requirement?",
+      options:["High accuracy / precision","Fast response time","Long battery life","Low cost","Small physical size"] },
+    { id:"q3", text:"Where will this project be used?",
+      options:["Indoor — on a desk or wall","Outdoor — needs weather protection","Portable — carried around","Inside a machine or enclosure","Multiple locations"] },
+    { id:"q4", text:"How should results or outputs be shown?",
+      options:["Screen/display (OLED/LCD)","LED lights or indicators","Web page / dashboard","Buzzer or sound","No output needed"] },
+    { id:"q5", text:"What is your budget range for components?",
+      options:["Under $10 (very minimal)","$10-25 (basic project)","$25-50 (mid range)","$50+ (quality components)","No budget limit"] },
+    { id:"q6", text:"Does this project need to connect to other devices?",
+      options:["No — standalone only","Yes — to my phone","Yes — to a computer","Yes — to the internet","Yes — to other sensors/devices"] },
   ];
 }
