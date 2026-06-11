@@ -1032,7 +1032,9 @@ export default function BuildNewPage() {
           borderLeft:`1px solid ${T.border}`,overflow:"hidden",display:"flex",flexDirection:"column"}}>
           <AIReasoningPanel
             projectTitle={currentProject?.description ?? ""}
-            steps={stages.map((s): ReasoningStep => ({
+            steps={stages
+              .filter(s => s.key !== "summary")  // summary shown as card, not as a step
+              .map((s): ReasoningStep => ({
               id:        s.key,
               label:     s.label,
               status:    s.state === "completed" ? "done"
@@ -1050,27 +1052,16 @@ export default function BuildNewPage() {
                        : "think") as ReasoningStep["icon"],
             }))}
             messages={msgs
-              .filter(m => !stages.find(s => s.key === m.id))
+              .filter(m => !stages.find(s => s.key === m.id))  // excludes all stage msgs incl. summary
               .map((m): AIChatMessage => ({
                 id:       m.id,
                 role:     m.role as "user" | "assistant",
                 content:  m.content,
                 streaming:m.streaming,
               }))}
-            summary={pipelineDone ? (() => {
-              // Build a concise summary from all completed stage content
-              const parts = stages
-                .filter(s => s.state === "completed")
-                .map(s => {
-                  const content = msgs.find(m => m.id === s.key)?.content ?? "";
-                  if (!content) return null;
-                  return `**${s.label}**\n${content}`;
-                })
-                .filter(Boolean);
-              return parts.length > 0
-                ? `Here's a complete analysis of your project:\n\n${parts.join("\n\n")}`
-                : "";
-            })() : ""}
+            summary={pipelineDone
+              ? (msgs.find(m => m.id === "summary")?.content?.trim() ?? "")
+              : ""}
             chatInput={chatIn}
             chatBusy={chatBusy}
             pipelineDone={pipelineDone}

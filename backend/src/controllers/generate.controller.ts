@@ -64,6 +64,15 @@ Describe the validation approach in 3-4 bullet points: what to test, how to simu
 
 Outline the documentation package in 3-4 bullet points: README sections, BOM format, assembly instructions, and usage guide. Keep it practical and developer-friendly.`,
   },
+  {
+    key:   "summary",
+    label: "Summary",
+    // Short prompt — strict 60 word limit enforced in max_tokens too
+    prompt: (idea: string) =>
+      `The user wants to build: "${idea}".
+
+Write a 2-3 sentence project summary. State: what it does, the main components, and one key implementation note. Be direct. No markdown. No bullet points. Maximum 60 words.`,
+  },
 ] as const;
 
 /* ── SSE sender ─────────────────────────────────────────────────────────── */
@@ -102,10 +111,13 @@ export const generatePipeline = async (req: AuthRequest, res: Response) => {
         total: STAGES.length,
       });
 
+      // Summary stage gets a hard 120-token cap — keeps it short
+      const maxTok = stage.key === "summary" ? 120 : 600;
+
       const content = await callLLM(
         [{ role: "user", content: stage.prompt(idea.trim()) }],
         modelKey,
-        600,
+        maxTok,
       );
 
       // Word-by-word streaming
