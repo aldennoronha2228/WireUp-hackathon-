@@ -832,7 +832,6 @@ export default function BuildNewPage() {
                     borderBottom:isA?`2px solid ${T.blueUI}`:"2px solid transparent",
                     borderRight:`1px solid ${T.border}`,
                     color:isA?T.textBright:T.textDim,transition:"color 0.1s"}}>
-                  <span style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:ld(getLang(tab)),boxShadow:`0 0 3px ${ld(getLang(tab))}88`}}/>
                   <span style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>
                     {tab}
                   </span>
