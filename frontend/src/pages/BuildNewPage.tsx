@@ -168,9 +168,13 @@ function StageIcon({ s }: { s: StageState }) {
 
 /* ─── Model catalogue (matches backend chat.controller.ts) ─────────────── */
 const MODELS = [
-  { key: "WU Lite", id: "claude-haiku-4-5-20251001", sub: "claude-haiku · Fast"       },
-  { key: "WU Pro",  id: "claude-sonnet-4-6",          sub: "claude-sonnet · Balanced"  },
-  { key: "WU Max",  id: "claude-opus-4-8",             sub: "claude-opus · Powerful"    },
+  { key: "WU Lite",     id: "claude-haiku-4-5-20251001", sub: "claude-haiku · Fast"       },
+  { key: "WU Pro",      id: "claude-sonnet-4-6",          sub: "claude-sonnet · Balanced"  },
+  { key: "WU Max",      id: "claude-opus-4-8",             sub: "claude-opus · Powerful"    },
+  { key: "GPT-4o",      id: "gpt-4o",                      sub: "gpt-4o · Smart & fast"     },
+  { key: "GPT-4o Mini", id: "gpt-4o-mini",             sub: "gpt-4o-mini · Fast & light"},
+  { key: "DeepSeek V3", id: "deepseek-v3",             sub: "deepseek-v3 · Efficient"   },
+  { key: "DeepSeek R1", id: "deepseek-reasoner",       sub: "deepseek-reasoner · Reasoning" },
 ] as const;
 type ModelKey = typeof MODELS[number]["key"];
 

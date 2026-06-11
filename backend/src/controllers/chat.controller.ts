@@ -6,9 +6,13 @@ import Project from "../models/project.model";
 interface AuthRequest extends Request { user?: IUser; }
 
 export const CHAT_MODEL_INFO = [
-  { key: "WU Lite", id: MODEL_MAP["WU Lite"], sub: "claude-haiku · Fast & cheap"  },
-  { key: "WU Pro",  id: MODEL_MAP["WU Pro"],  sub: "claude-sonnet · Balanced"      },
-  { key: "WU Max",  id: MODEL_MAP["WU Max"],  sub: "claude-opus · Most capable"    },
+  { key: "WU Lite",     id: MODEL_MAP["WU Lite"],     sub: "claude-haiku · Fast" },
+  { key: "WU Pro",      id: MODEL_MAP["WU Pro"],      sub: "claude-sonnet · Balanced" },
+  { key: "WU Max",      id: MODEL_MAP["WU Max"],      sub: "claude-opus · Powerful" },
+  { key: "GPT-4o",      id: MODEL_MAP["GPT-4o"],      sub: "gpt-4o · Smart & fast" },
+  { key: "GPT-4o Mini", id: MODEL_MAP["GPT-4o Mini"], sub: "gpt-4o-mini · Fast & light" },
+  { key: "DeepSeek V3", id: MODEL_MAP["DeepSeek V3"], sub: "deepseek-v3 · Efficient" },
+  { key: "DeepSeek R1", id: MODEL_MAP["DeepSeek R1"], sub: "deepseek-reasoner · Reasoning" },
 ];
 
 /* ── Detect if message is an edit request ────────────────────────────────── */
