@@ -260,6 +260,32 @@ export const generatePipeline = async (req: AuthRequest, res: Response) => {
   const context: Record<string, string> = {};  // accumulated analysis per stage
 
   try {
+    // ── Generate a clean project name first ──────────────────────────────
+    let projectName = idea.trim();
+    try {
+      const nameResult = await callLLM(
+        [{ role: "user", content:
+          `The user wants to build: "${idea.trim()}".
+Generate a short, clean project name (3-5 words max). Examples: "Arduino Weather Station", "ESP32 Smart Plant Monitor", "IoT Temperature Logger".
+Reply with ONLY the project name, nothing else.`
+        }],
+        modelKey,
+        20,
+      );
+      projectName = nameResult.trim().replace(/^["']|["']$/g, ""); // strip any quotes
+
+      // Update the project's description in DB to the clean name
+      if (projectId && req.user?._id) {
+        await Project.findOneAndUpdate(
+          { _id: projectId, owner: req.user._id },
+          { description: projectName }
+        );
+      }
+
+      send("project_name", { name: projectName });
+    } catch {
+      // Non-fatal — keep original idea as name
+    }
     for (let i = 0; i < STAGES.length; i++) {
       const stage = STAGES[i];
 

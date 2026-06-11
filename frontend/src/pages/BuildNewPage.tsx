@@ -347,6 +347,18 @@ export default function BuildNewPage() {
         }
         if (event === "pipeline_done") { setPipelinePct(100); setPipelineDone(true); setPipeActive(false); setBotOpen(true); addLog("success", "[wireup] Generation complete."); }
         if (event === "pipeline_error") { setStages(p => p.map(s => s.state==="running"?{...s,state:"failed"}:s)); setPipeActive(false); addLog("error", `[pipeline] ${data.error}`); toast.error(data.error); }
+        // AI-generated short project name — update store so title bar shows clean name
+        if (event === "project_name" && data.name) {
+          const cleanName = String(data.name).trim();
+          if (cleanName) {
+            useProjectStore.setState(s => ({
+              currentProject: s.currentProject
+                ? { ...s.currentProject, description: cleanName }
+                : s.currentProject,
+            }));
+          }
+          addLog("info", `[project] Renamed to: ${data.name}`);
+        }
         // File created by AI — add to project store immediately so explorer updates live
         if (event === "file_created" && id) {
           const { filename, language, content: fileContent } = data as { filename: string; language: string; content: string; folder: string };
