@@ -3,7 +3,7 @@
  * Fixed: consistent handle IDs between nodes and edges
  */
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import ReactFlow, {
   Background, Controls, MiniMap,
   Handle, Position,
@@ -588,8 +588,16 @@ function Inner({ desc, diagramContent }: { desc: string; diagramContent?: string
     return build(desc);
   }, [desc, diagramContent]);
 
-  const [nodes,,onNC] = useNodesState(n0);
-  const [edges,,onEC] = useEdgesState(e0);
+  const [nodes, setNodes, onNC] = useNodesState(n0);
+  const [edges, setEdges, onEC] = useEdgesState(e0);
+
+  useEffect(() => {
+    setNodes(n0);
+  }, [n0, setNodes]);
+
+  useEffect(() => {
+    setEdges(e0);
+  }, [e0, setEdges]);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>

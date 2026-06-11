@@ -74,10 +74,34 @@ Keep the JSON structure strictly valid. Structure:
 IMPORTANT: When the user asks you to change code, wiring, components or anything in the project files,
 you MUST produce the updated file content using this exact format at the END of your response:
 
+Example 1 (modifying firmware.ino):
 <file_edit>
 <filename>firmware.ino</filename>
 <content>
 // complete updated file content here
+</content>
+</file_edit>
+
+Example 2 (modifying diagram.json):
+<file_edit>
+<filename>diagram.json</filename>
+<content>
+{
+  "project": "Weather Station",
+  "components": [
+    {"id": "mcu", "name": "Arduino Uno", "type": "MCU"},
+    {"id": "dht22", "name": "DHT22", "type": "Sensor"}
+  ],
+  "connections": [
+    {"from": "dht22.VCC", "to": "mcu.5V", "signal": "5V"},
+    {"from": "dht22.GND", "to": "mcu.GND", "signal": "GND"},
+    {"from": "dht22.DATA", "to": "mcu.D4", "signal": "DATA"}
+  ],
+  "powerRails": [
+    {"label": "5V", "components": ["mcu.5V", "dht22.VCC"]},
+    {"label": "GND", "components": ["mcu.GND", "dht22.GND"]}
+  ]
+}
 </content>
 </file_edit>
 
