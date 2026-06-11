@@ -254,6 +254,10 @@ export default function BuildNewPage() {
   const [code,      setCode]      = useState("");
   const [dirty,     setDirty]     = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const activeTabRef = useRef(activeTab);
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   /* explorer collapsed state */
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -451,6 +455,7 @@ export default function BuildNewPage() {
           messages:       history,
           model,
           projectContext: currentProject?.description ?? "",
+          projectId:      id,
         }),
       });
 
@@ -484,6 +489,23 @@ export default function BuildNewPage() {
                 if (n[aidx]) n[aidx] = { ...n[aidx], content: d.full, streaming: true };
                 return n;
               });
+            }
+            if (ev === "file_edits" && id) {
+              const { edits } = d as { edits: Array<{ filename: string; content: string }> };
+              for (const edit of edits) {
+                const ext = edit.filename.split(".").pop()?.toLowerCase() ?? "";
+                const lang = ext === "ino" ? "Arduino"
+                  : ext === "md" ? "Markdown"
+                  : ext === "csv" ? "CSV"
+                  : ext === "json" ? "JSON" : "Plain Text";
+
+                await addFile(id, { name: edit.filename, language: lang, content: edit.content });
+                if (activeTabRef.current === edit.filename) {
+                  setCode(edit.content);
+                  setDirty(false);
+                }
+                addLog("success", `[wireup] AI updated ${edit.filename}`);
+              }
             }
             if (ev === "done") {
               setMsgs(p => {
@@ -867,6 +889,7 @@ export default function BuildNewPage() {
               pipelineDone
                 ? <CircuitDiagram
                     projectDescription={currentProject?.description ?? ""}
+                    diagramContent={currentProject?.files.find(f => f.name === "diagram.json")?.content}
                     pipelineDone={pipelineDone}
                   />
                 : <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,background:T.bg}}>

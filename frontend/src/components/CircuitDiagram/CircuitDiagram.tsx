@@ -358,9 +358,236 @@ function build(desc: string): { nodes: Node[]; edges: Edge[] } {
   return { nodes, edges };
 }
 
+/* ── Build from diagram.json ────────────────────────────────────────── */
+function buildFromJSON(jsonStr: string, projectDesc: string): { nodes: Node[]; edges: Edge[] } {
+  try {
+    const data = typeof jsonStr === "string" ? JSON.parse(jsonStr) : jsonStr;
+    if (!data || !data.components || !Array.isArray(data.components)) {
+      throw new Error("Invalid diagram JSON: missing components array");
+    }
+
+    const nodes: Node[] = [];
+    const edges: Edge[] = [];
+
+    // Find MCU component
+    const mcuComp = data.components.find((c: any) =>
+      c.id === "mcu" ||
+      (c.type && String(c.type).toLowerCase() === "mcu") ||
+      (c.name && String(c.name).toLowerCase().includes("arduino")) ||
+      (c.name && String(c.name).toLowerCase().includes("esp32"))
+    );
+    const mcuId = mcuComp ? mcuComp.id : "mcu";
+    const mcuName = mcuComp ? mcuComp.name : "Arduino Uno";
+
+    const isESP = mcuName.toLowerCase().includes("esp32") || projectDesc.toLowerCase().includes("esp32");
+
+    const leftPins  = isESP
+      ? ["D0","D2","D4","D5","D12","D13","D14","A0","A2","A4"]
+      : ["D0","D2","D4","D6","D8","D10","D12","A0","A2","A4"];
+    const rightPins = isESP
+      ? ["D1","D3","TX","RX","SDA","SCL","D15","A1","A3","A5"]
+      : ["D1","D3","D5","D7","D9","D11","D13","A1","A3","A5"];
+
+    const rows: Array<[string|undefined, string|undefined]> = Array.from(
+      { length: Math.max(leftPins.length, rightPins.length) },
+      (_, i) => [leftPins[i], rightPins[i]]
+    );
+
+    // Add MCU Node
+    nodes.push({
+      id: mcuId,
+      type: "mcu",
+      position: { x: 400, y: 60 },
+      data: { label: mcuName, rows },
+    });
+
+    // Add peripheral components
+    const otherComps = data.components.filter((c: any) => c.id !== mcuId);
+    let yOff = 80;
+
+    otherComps.forEach((c: any, index: number) => {
+      const compId = c.id || `comp-${index}`;
+      const name = c.name || c.id || `Component ${index}`;
+      const type = c.type || "Sensor";
+
+      let color = "#3b82f6"; // default blue
+      const nameLower = name.toLowerCase();
+      if (nameLower.includes("dht") || nameLower.includes("temp") || nameLower.includes("humidity") || nameLower.includes("weather")) {
+        color = "#3ecf8e";
+      } else if (nameLower.includes("oled") || nameLower.includes("display") || nameLower.includes("screen")) {
+        color = "#4fc1ff";
+      } else if (nameLower.includes("servo") || nameLower.includes("motor") || nameLower.includes("arm")) {
+        color = "#f59e0b";
+      } else if (nameLower.includes("relay")) {
+        color = "#ef4444";
+      } else if (nameLower.includes("ultrasonic") || nameLower.includes("hcsr") || nameLower.includes("distance") || nameLower.includes("proximity")) {
+        color = "#8b5cf6";
+      } else if (nameLower.includes("bmp") || nameLower.includes("pressure") || nameLower.includes("baro")) {
+        color = "#f97316";
+      }
+
+      // Find pins for this component from connections or powerRails
+      const pinNameSet = new Set<string>();
+      if (data.connections && Array.isArray(data.connections)) {
+        data.connections.forEach((conn: any) => {
+          if (conn.from && typeof conn.from === "string") {
+            const [pComp, pPin] = conn.from.split(".");
+            if (pComp === compId && pPin) pinNameSet.add(pPin);
+          }
+          if (conn.to && typeof conn.to === "string") {
+            const [pComp, pPin] = conn.to.split(".");
+            if (pComp === compId && pPin) pinNameSet.add(pPin);
+          }
+        });
+      }
+
+      if (data.powerRails && Array.isArray(data.powerRails)) {
+        data.powerRails.forEach((rail: any) => {
+          if (rail.components && Array.isArray(rail.components)) {
+            rail.components.forEach((compPin: string) => {
+              const [pComp, pPin] = compPin.split(".");
+              if (pComp === compId && pPin) pinNameSet.add(pPin);
+            });
+          }
+        });
+      }
+
+      const pinList = pinNameSet.size > 0
+        ? Array.from(pinNameSet).map(pinName => ({
+            id: `${compId}-${pinName}`,
+            label: pinName,
+            signal: pinName
+          }))
+        : [
+            { id: `${compId}-VCC`, label: "VCC", signal: "vcc" },
+            { id: `${compId}-GND`, label: "GND", signal: "gnd" },
+            { id: `${compId}-DATA`, label: "DATA", signal: "data" }
+          ];
+
+      nodes.push({
+        id: compId,
+        type: "comp",
+        position: { x: 60, y: yOff },
+        data: {
+          label: name,
+          description: type,
+          color,
+          pins: pinList
+        }
+      });
+
+      yOff += 190;
+    });
+
+    const edge = (
+      id: string, src: string, srcH: string,
+      tgt: string, tgtH: string,
+      color: string, label = ""
+    ): Edge => ({
+      id, source: src, sourceHandle: srcH,
+      target: tgt, targetHandle: tgtH,
+      type: "smoothstep",
+      animated: false,
+      label,
+      labelStyle: { fill: color, fontSize: 10, fontFamily: "var(--font-mono)" },
+      labelBgStyle: { fill: "#0a0a0f", fillOpacity: 0.9 },
+      labelBgPadding: [4, 3] as [number, number],
+      labelBgBorderRadius: 3,
+      style: { stroke: color, strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed, color, width: 12, height: 12 },
+    });
+
+    const getMcuHandle = (pinName: string) => {
+      const pL = pinName.toLowerCase();
+      if (pL === "5v" || pL === "vcc") return "5v-l";
+      if (pL === "3v3" || pL === "3.3v") return "3v3-l";
+      if (pL === "gnd") return "gnd-l";
+      return `pin-${pinName}`;
+    };
+
+    if (data.connections && Array.isArray(data.connections)) {
+      data.connections.forEach((conn: any, i: number) => {
+        if (!conn.from || !conn.to) return;
+        const [fromComp, fromPin] = conn.from.split(".");
+        const [toComp, toPin] = conn.to.split(".");
+
+        if (!fromComp || !toComp) return;
+
+        let srcHandle = fromComp === mcuId ? getMcuHandle(fromPin) : `${fromComp}-${fromPin}`;
+        let tgtHandle = toComp === mcuId ? getMcuHandle(toPin) : `${toComp}-${toPin}`;
+
+        const signal = conn.signal || fromPin || toPin || "data";
+        const color = sigColor(signal);
+
+        edges.push(
+          edge(
+            `edge-${fromComp}-${fromPin}-${toComp}-${toPin}-${i}`,
+            fromComp,
+            srcHandle,
+            toComp,
+            tgtHandle,
+            color,
+            signal
+          )
+        );
+      });
+    }
+
+    // Process power rails
+    if (data.powerRails && Array.isArray(data.powerRails)) {
+      data.powerRails.forEach((rail: any, ri: number) => {
+        const railLabel = rail.label || "PWR";
+        const color = sigColor(railLabel);
+        const railComps = rail.components || [];
+
+        const mcuPinStr = railComps.find((rc: string) => rc.startsWith(`${mcuId}.`));
+        const otherCompPins = railComps.filter((rc: string) => !rc.startsWith(`${mcuId}.`));
+
+        if (mcuPinStr && otherCompPins.length > 0) {
+          const mcuPinName = mcuPinStr.split(".")[1] || "";
+          const mcuHandle = getMcuHandle(mcuPinName);
+
+          otherCompPins.forEach((rc: string, ci: number) => {
+            const [compId, compPinName] = rc.split(".");
+            if (!compId || !compPinName) return;
+
+            const edgeId = `rail-${railLabel}-${compId}-${compPinName}-${ri}-${ci}`;
+            if (edges.some(e => e.id === edgeId || (e.source === compId && e.sourceHandle === `${compId}-${compPinName}` && e.target === mcuId && e.targetHandle === mcuHandle))) {
+              return;
+            }
+
+            edges.push(
+              edge(
+                edgeId,
+                compId,
+                `${compId}-${compPinName}`,
+                mcuId,
+                mcuHandle,
+                color,
+                railLabel
+              )
+            );
+          });
+        }
+      });
+    }
+
+    return { nodes, edges };
+  } catch (err) {
+    console.error("Failed to build from diagram.json, falling back to build():", err);
+    return build(projectDesc);
+  }
+}
+
 /* ── Inner (needs ReactFlowProvider context) ─────────────────────────── */
-function Inner({ desc }: { desc: string }) {
-  const { nodes: n0, edges: e0 } = useMemo(() => build(desc), [desc]);
+function Inner({ desc, diagramContent }: { desc: string; diagramContent?: string }) {
+  const { nodes: n0, edges: e0 } = useMemo(() => {
+    if (diagramContent && diagramContent.trim().length > 0) {
+      return buildFromJSON(diagramContent, desc);
+    }
+    return build(desc);
+  }, [desc, diagramContent]);
+
   const [nodes,,onNC] = useNodesState(n0);
   const [edges,,onEC] = useEdgesState(e0);
 
@@ -405,8 +632,9 @@ function Inner({ desc }: { desc: string }) {
 }
 
 /* ── Export ──────────────────────────────────────────────────────────── */
-export function CircuitDiagram({ projectDescription, pipelineDone }: {
+export function CircuitDiagram({ projectDescription, diagramContent, pipelineDone }: {
   projectDescription: string;
+  diagramContent?: string;
   pipelineDone: boolean;
 }) {
   if (!pipelineDone) {
@@ -424,7 +652,7 @@ export function CircuitDiagram({ projectDescription, pipelineDone }: {
   }
   return (
     <ReactFlowProvider>
-      <Inner desc={projectDescription}/>
+      <Inner desc={projectDescription} diagramContent={diagramContent}/>
     </ReactFlowProvider>
   );
 }
