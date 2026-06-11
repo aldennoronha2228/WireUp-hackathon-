@@ -309,7 +309,7 @@ export default function BuildNewPage() {
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
-  /* auto-start — show questionnaire first, then pipeline */
+  /* auto-start — only run questionnaire + pipeline if project hasn't been generated yet */
   useEffect(() => {
     if (!currentProject || started.current || pipelineDone) return;
     started.current = true;
@@ -317,19 +317,33 @@ export default function BuildNewPage() {
     const routerPrompt = (location.state as { prompt?: string } | null)?.prompt?.trim();
     const idea = routerPrompt || currentProject.description;
 
+    // ── Check if project was already generated ──────────────────────────
+    // A project is "done" if it has more than 1 file OR localStorage says so
+    const alreadyGenerated = currentProject.files.length > 1 ||
+      localStorage.getItem(`wireup:done:${currentProject._id}`) === "1";
+
+    if (alreadyGenerated) {
+      // Restore state without re-running anything
+      setPipelineDone(true);
+      setPipelinePct(100);
+      // Show the initial prompt as the user message (use description as fallback)
+      const displayPrompt = routerPrompt || currentProject.description;
+      setMsgs([{ id: "u-init", role: "user", content: displayPrompt, streaming: false }]);
+      addLog("info", `[wireup] Restored project: ${currentProject.description}`);
+      return;
+    }
+
+    // ── First time — run questionnaire then pipeline ─────────────────────
     // 1. Show user's typed message immediately
     if (routerPrompt) {
       setMsgs([
         { id: `u-init`, role: "user", content: routerPrompt, streaming: false },
-        // 2. Add a thinking placeholder right away — streaming:true + empty content
-        //    triggers the bouncing dots + shimmer animation in ChatTurn
         { id: `thinking-init`, role: "assistant", content: "", streaming: true },
       ]);
     }
 
-    // 3. Small delay so the animation is visible before questionnaire overlay appears
+    // 2. Brief delay so thinking animation is visible, then show questionnaire
     setTimeout(() => {
-      // Remove the thinking placeholder before showing questionnaire
       setMsgs(p => p.filter(m => m.id !== "thinking-init"));
       setQuestionnaireIdea(idea);
       setShowQuestionnaire(true);
@@ -374,7 +388,12 @@ export default function BuildNewPage() {
           if (data.progress !== undefined) setPipelinePct(data.progress);
           addLog("success", `[pipeline] Done: ${data.key}`);
         }
-        if (event === "pipeline_done") { setPipelinePct(100); setPipelineDone(true); setPipeActive(false); setBotOpen(true); addLog("success", "[wireup] Generation complete."); }
+        if (event === "pipeline_done") {
+          setPipelinePct(100); setPipelineDone(true); setPipeActive(false); setBotOpen(true);
+          // Persist completion flag for this project so reloads don't re-run
+          localStorage.setItem(`wireup:done:${id}`, "1");
+          addLog("success", "[wireup] Generation complete.");
+        }
         if (event === "pipeline_error") { setStages(p => p.map(s => s.state==="running"?{...s,state:"failed"}:s)); setPipeActive(false); addLog("error", `[pipeline] ${data.error}`); toast.error(data.error); }
         // AI-generated short project name — update store so title bar shows clean name
         if (event === "project_name" && data.name) {
@@ -1154,6 +1173,8 @@ export default function BuildNewPage() {
             onSend={sendChat}
             onStop={() => setChatBusy(false)}
             onNewChat={() => {
+              // Clear completion flag so restart works
+              if (id) localStorage.removeItem(`wireup:done:${id}`);
               started.current = false;
               setPipelineDone(false);
               setPipeActive(false);
