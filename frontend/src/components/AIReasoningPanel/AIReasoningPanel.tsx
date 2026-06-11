@@ -63,7 +63,7 @@ interface Props {
   model: string;
   onChatInput: (v: string) => void; onSend: (attachments: string[]) => void; onStop: () => void;
   onNewChat: () => void; onModelChange: (m: string) => void;
-  modelOptions: Array<{ key: string; sub: string }>;
+  modelOptions: Array<{ key: string; sub: string; group?: string }>;
 }
 
 /* ── Markdown renderer (minimal, no deps) ────────────────────────────────── */
@@ -433,7 +433,7 @@ function SummaryTurn({ summary }: { summary: string }) {
 /* ── Model selector pill — uses fixed positioning to escape panel overflow ── */
 function ModelPill({ value, options, onChange }: {
   value: string;
-  options: Array<{ key: string; sub: string }>;
+  options: Array<{ key: string; sub: string; group?: string }>;
   onChange: (k: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -504,37 +504,54 @@ function ModelPill({ value, options, onChange }: {
               boxShadow: "0 -4px 20px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.4)",
               zIndex: 99999,
             }}>
-            <div style={{ padding: "4px 0" }}>
-              {options.map(m => (
-                <button key={m.key}
-                  onClick={() => { onChange(m.key); setOpen(false); }}
-                  style={{
-                    width: "100%", display: "flex", flexDirection: "column",
-                    padding: "8px 12px", border: "none", cursor: "pointer",
-                    textAlign: "left",
-                    background: m.key === value ? "rgba(14,125,212,0.18)" : "transparent",
-                    transition: "background 0.1s",
-                  }}
-                  onMouseOver={e => { if (m.key !== value) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
-                  onMouseOut={e  => { e.currentTarget.style.background = m.key === value ? "rgba(14,125,212,0.18)" : "transparent"; }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 13, fontWeight: m.key === value ? 500 : 400,
-                      color: m.key === value ? "#60b8f9" : V.text }}>
-                      {m.key}
-                    </span>
-                    {m.key === value && (
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-                        stroke="#60b8f9" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l4 4 6-6"/>
-                      </svg>
-                    )}
+            <div style={{ padding: "8px 0", maxHeight: 380, overflowY: "auto" }} className="ide-scroll">
+              {/* Title Header */}
+              <div style={{ padding: "4px 14px", fontSize: 11, fontWeight: 600, color: V.textBri, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                WireUp Models
+              </div>
+              
+              <div style={{ height: 1, background: V.sep, margin: "6px 14px 10px 14px" }} />
+
+              {["Recommended", "Reasoning Models", "Fast Models"].map((groupName, gIdx) => {
+                const groupModels = options.filter(m => m.group === groupName);
+                if (groupModels.length === 0) return null;
+                
+                return (
+                  <div key={groupName} style={{ marginTop: gIdx > 0 ? 12 : 0, marginBottom: 4 }}>
+                    {/* Group Title */}
+                    <div style={{ padding: "4px 14px", fontSize: 10, fontWeight: 700, color: "#60b8f9", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {groupName}
+                    </div>
+                    
+                    {/* Group Options */}
+                    {groupModels.map(m => {
+                      const isActive = m.key === value;
+                      return (
+                        <button key={m.key} onClick={() => { onChange(m.key); setOpen(false); }}
+                          style={{ width:"100%", display:"flex", flexDirection:"column",
+                            padding:"6px 14px 6px 20px", background: isActive ? "rgba(14,125,212,0.18)" : "transparent",
+                            border:"none", cursor:"pointer", textAlign:"left", transition:"background 0.1s" }}
+                          onMouseOver={e => { if (!isActive) e.currentTarget.style.background="rgba(255,255,255,0.05)"; }}
+                          onMouseOut={e  => { e.currentTarget.style.background = isActive ? "rgba(14,125,212,0.18)" : "transparent"; }}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,width:"100%"}}>
+                            <span style={{ fontSize:12, fontWeight:500, color: isActive ? "#60b8f9" : V.textBri }}>
+                              {m.key}
+                            </span>
+                            {isActive && (
+                              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#60b8f9" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l4 4 6-6"/>
+                              </svg>
+                            )}
+                          </div>
+                          <span style={{ fontSize:10, color:V.textDim, marginTop:2, fontFamily:"var(--font-sans)", lineHeight: "1.3" }}>
+                            {m.sub}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <span style={{ fontSize: 11, color: V.textDim, marginTop: 2,
-                    fontFamily: "var(--font-mono)" }}>
-                    {m.sub}
-                  </span>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </motion.div>
         )}

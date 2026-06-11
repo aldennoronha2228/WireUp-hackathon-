@@ -1260,7 +1260,7 @@ export default function BuildNewPage() {
               }
             }}
             onModelChange={(m) => setModel(m as ModelKey)}
-            modelOptions={MODELS.map(m => ({ key: m.key, sub: m.sub }))}
+            modelOptions={MODELS.map(m => ({ key: m.key, sub: m.sub, group: m.group }))}
           />
         </aside>
       </div>
