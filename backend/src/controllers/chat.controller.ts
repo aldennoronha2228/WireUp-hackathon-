@@ -20,6 +20,31 @@ const EDIT_PATTERNS = [
 ];
 
 function isEditRequest(msg: string): boolean {
+  const l = msg.toLowerCase();
+  
+  const editKeywords = [
+    "change", "replace", "swap", "update", "modify", "edit", "add", "remove", 
+    "delete", "fix", "rewrite", "wire", "connect", "disconnect", "use", "switch", 
+    "instead", "implement", "create", "write", "configure", "setup", "put", "attach",
+    "insert", "make changes"
+  ];
+  
+  const targetKeywords = [
+    "code", "firmware", "sensor", "component", "pin", "wiring", "diagram", 
+    "circuit", "led", "display", "buzzer", "button", "relay", "servo", "motor", 
+    "esp32", "arduino", "dht", "oled", "bmp", "ultrasonic", "file", "sketch",
+    "connection", "component"
+  ];
+
+  const hasEdit = editKeywords.some(kw => l.includes(kw));
+  const hasTarget = targetKeywords.some(kw => l.includes(kw));
+  
+  if (hasEdit && hasTarget) return true;
+  
+  if (l.includes("diagram.json") || l.includes("firmware.ino") || l.includes("components.md") || l.includes("pins.csv") || l.includes("readme.md")) {
+    return true;
+  }
+  
   return EDIT_PATTERNS.some(p => p.test(msg));
 }
 
@@ -35,6 +60,17 @@ Current project: ${projectContext}
 Project files:
 ${fileList || "No files yet."}
 
+DIAGRAM EDITING DIRECTIVE:
+You have direct control over the circuit diagram layout and visual wiring canvas by modifying the "diagram.json" file.
+When the user asks you to add, remove, or modify components (e.g. DHT22, servo, LED, ESP32, buzzer) or change the wiring connections, you must modify the "diagram.json" file.
+Keep the JSON structure strictly valid. Structure:
+{
+  "project": "project name",
+  "components": [{"id": "mcu", "name": "Arduino Uno", "type": "MCU"}, {"id": "dht22", "name": "DHT22", "type": "Sensor"}],
+  "connections": [{"from": "dht22.VCC", "to": "mcu.5V", "signal": "5V"}, {"from": "dht22.DATA", "to": "mcu.D4", "signal": "DATA"}],
+  "powerRails": [{"label": "5V", "components": ["mcu.5V", "dht22.VCC"]}]
+}
+
 IMPORTANT: When the user asks you to change code, wiring, components or anything in the project files,
 you MUST produce the updated file content using this exact format at the END of your response:
 
@@ -45,7 +81,7 @@ you MUST produce the updated file content using this exact format at the END of 
 </content>
 </file_edit>
 
-You can include multiple <file_edit> blocks if multiple files need updating.
+You can include multiple <file_edit> blocks if multiple files need updating (e.g. diagram.json and firmware.ino).
 Always produce the COMPLETE file content, not just the changed part.
 Only include <file_edit> blocks when actually making edits.`;
 }
